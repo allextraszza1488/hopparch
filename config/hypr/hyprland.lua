@@ -132,9 +132,12 @@ for _, d in ipairs({
           { repeating = true })
 end
 
--- mouse: SUPER + left drag moves, SUPER + right drag resizes
-hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+-- mouse: SUPER + left drag moves, SUPER + right drag resizes. Real mice only:
+-- the keyboard mouse (SUPER+, / SUPER+.) clicks with SUPER still held, and
+-- must click, not grab the window
+local real_mice = { inclusive = false, list = { "ydotoold-virtual-device-1", "ydotoold-virtual-device" } }
+hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, device = real_mice })
+hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, device = real_mice })
 
 
 -- workspaces 1-9: go there, +SHIFT sends the window there
