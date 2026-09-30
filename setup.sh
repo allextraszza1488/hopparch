@@ -20,6 +20,12 @@ GROUP_=$(id -gn "$USER_")
 # copies of what setup.sh installed last time, to tell your edits from ours
 STATE="$HOME_/.local/state/hopparch/installed"
 
+# Launcher entries hidden from SUPER+D. They come with other packages
+# (sound, ffmpeg, waybar, thunar), so they can't be uninstalled. Remove a
+# name here to get its entry back.
+STASHED="avahi-discover bssh bvnc qv4l2 qvidcap xgps xgpsspeed
+         xfce4-about thunar-bulk-rename thunar-settings"
+
 
 packages() {
   say "Packages"
@@ -49,6 +55,19 @@ copy_config() {
   done < <(find config -type f -print0)
 }
 
+# a same-named entry in ~/.local/share/applications overrides the system one
+stash_apps() {
+  say "Stashing launcher clutter"
+  local dir="$HOME_/.local/share/applications" app
+  runuser -u "$USER_" -- mkdir -p "$dir"
+  # drop our old overrides first, so names removed from the list come back
+  grep -l -x '# hopparch-stash' "$dir"/*.desktop 2>/dev/null | xargs -r rm -f
+  for app in $STASHED; do
+    printf '[Desktop Entry]\n# hopparch-stash\nType=Application\nName=%s\nNoDisplay=true\nHidden=true\n' "$app" \
+      | runuser -u "$USER_" -- tee "$dir/$app.desktop" >/dev/null
+  done
+}
+
 copy_system() {
   say "System files -> /"
   local src
@@ -73,6 +92,7 @@ services() {
 
 packages
 copy_config
+stash_apps
 copy_system
 services
 say "Done. Reboot (or log out) to get the login screen."
