@@ -313,7 +313,8 @@ EOF
 }
 
 run_archinstall() {
-  say "Starting archinstall: check the settings, then choose Install"
+  say "Starting archinstall: check the settings, then choose Install."
+  say "When it says 'Installation completed', choose 'Exit archinstall' (not Reboot) -- the desktop setup runs after that."
   archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" || true
 }
 
