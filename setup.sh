@@ -129,10 +129,12 @@ full_extras() {
 
   # Claude Code: not in the Arch repos. Installed into ~/.local (already in
   # fish's PATH), never logged in. A failed download only costs this.
-  # HOME must be the user's: npm's install step downloads the real binary and
-  # fails quietly with root's HOME. "Works" = `claude --version` answers.
+  # The package's install script fetches the real binary; npm 12 blocks
+  # install scripts by default, so it's allowed for this one package only.
+  # "Works" = `claude --version` answers.
   if ! runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1; then
-    runuser -u "$USER_" -- env HOME="$HOME_" npm install -g --prefix "$HOME_/.local" @anthropic-ai/claude-code >/dev/null \
+    runuser -u "$USER_" -- env HOME="$HOME_" npm install -g --prefix "$HOME_/.local" \
+      --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code >/dev/null \
       || warn "Claude Code did not install (network?): run ./setup.sh again later"
   fi
 }
