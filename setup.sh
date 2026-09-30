@@ -61,6 +61,13 @@ services() {
   say "Shell + login screen"
   [[ $(getent passwd "$USER_" | cut -d: -f7) == /usr/bin/fish ]] || chsh -s /usr/bin/fish "$USER_"
   systemctl enable greetd.service
+  # login screen: username already filled in, only the password is asked.
+  # tuigreet --remember keeps this file up to date after each login.
+  install -d -o greeter -g greeter /var/cache/tuigreet
+  if [[ ! -s /var/cache/tuigreet/lastuser ]]; then
+    echo "$USER_" >/var/cache/tuigreet/lastuser
+    chown greeter:greeter /var/cache/tuigreet/lastuser
+  fi
 }
 
 
