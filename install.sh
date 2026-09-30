@@ -53,13 +53,22 @@ ask_secret() {
 preflight() {
   [[ $EUID -eq 0 ]] || die "run as root (the Arch ISO logs you in as root)"
   [[ -d /run/archiso ]] || die "run this from the Arch ISO, not an installed system"
+  # before any question: BIOS machines would only find out at the partitions
+  [[ -d /sys/firmware/efi ]] || die "only UEFI machines are supported for now (this one booted in BIOS mode)"
   ping -c1 -W3 archlinux.org >/dev/null 2>&1 \
     || die "no internet -- connect first: iwctl station wlan0 connect \"<network>\""
-  # the newest archinstall, not the one frozen into the ISO (the ISO's is
-  # still there as a fallback)
+  # the newest archinstall, not the one frozen into the ISO -- but only while
+  # the repos have the ISO's Python: archinstall's python dependency has no
+  # version, so after a Python update it would land in a site-packages the
+  # ISO's Python never reads, and not start at all
   say "Updating archinstall to the latest version"
-  pacman -Sy --needed --noconfirm archinstall >/dev/null 2>&1 \
-    || warn "could not update archinstall; using the ISO's version"
+  if ! pacman -Sy >/dev/null 2>&1; then
+    warn "could not reach the package repos; using the ISO's archinstall"
+  elif [[ $(pacman -Si python | awk '$1 == "Version" {print $3}') != "$(pacman -Q python | awk '{print $2}')" ]]; then
+    warn "the repos moved to a newer Python than this ISO's: keeping the ISO's archinstall (a newer ISO gets the newest)"
+  else
+    pacman -S --needed --noconfirm archinstall >/dev/null 2>&1 || warn "could not update archinstall; using the ISO's version"
+  fi
   local v
   v=$(archinstall --version 2>/dev/null | awk '{print $2}')
   [[ " $TESTED_ARCHINSTALL " == *" $v "* ]] \
@@ -199,7 +208,6 @@ pick() {
 }
 
 find_partitions() {
-  [[ $FIRMWARE == UEFI* ]] || die "only UEFI machines are supported for now"
   local esps=() roots=() name type
   # fresh cfdisk changes need udev to finish before lsblk shows the types
   udevadm settle
@@ -213,31 +221,92 @@ find_partitions() {
   ESP=$(pick "EFI partition" "${esps[@]}")
   ROOT=$(pick "root partition" "${roots[@]}")
 
-  # An ESP that already holds boot files (Windows, another Linux) is kept as
-  # it is and only mounted; an empty or unformatted one gets formatted.
-  ESP_STATUS=modify
-  if [[ $(lsblk -no FSTYPE "$ESP") == vfat ]]; then
-    local m
-    m=$(mktemp -d)
-    if mount -o ro "$ESP" "$m" 2>/dev/null; then
-      [[ -n $(ls -A "$m") ]] && ESP_STATUS=existing
-      umount "$m"
+  # optional: /home on a partition of its own (one you made in cfdisk).
+  # Always shown by name, even as the only choice: it will be formatted.
+  HOME_PART=""
+  local rest=() p
+  for p in "${roots[@]}"; do [[ $p != "$ROOT" ]] && rest+=("$p"); done
+  if ((${#rest[@]})) && ask_no "Separate /home partition?"; then
+    if ((${#rest[@]} == 1)); then
+      row Home "${rest[0]}  $(lsblk -dno SIZE,FSTYPE,PARTTYPENAME "${rest[0]}" | xargs)" >/dev/tty
+      ask_no "Use ${rest[0]} as /home (it gets formatted)?" && HOME_PART=${rest[0]}
+    else
+      HOME_PART=$(pick "/home partition" "${rest[@]}")
     fi
+  fi
+
+  # The EFI partition is /boot: kernels need room (Windows makes 100 MiB ones)
+  local mib=$(( $(cat "/sys/class/block/${ESP#/dev/}/size") / 2048 ))
+  ((mib >= 400)) || die "the EFI partition $ESP is only ${mib} MiB, kernels won't fit: make a new one of ~1G in cfdisk and pick that -- nothing was changed"
+
+  # What is on the chosen EFI partition decides what happens to it:
+  #  - empty or not FAT: formatted
+  #  - Windows' boot files: kept, only mounted at /boot
+  #  - an earlier hopparch attempt on this same root (its grub.cfg names the
+  #    root partition): those files are removed after the final yes, the
+  #    rest is kept
+  #  - another Linux's kernels or boot loader: refused. Two Linux systems
+  #    can't share /boot (same kernel file names), and archinstall's GRUB
+  #    would overwrite the other one's
+  #  - FAT that won't mount: refused, it could be Windows' with errors
+  ESP_STATUS=modify
+  ESP_CLEAN=()
+  if [[ $(lsblk -no FSTYPE "$ESP") == vfat ]]; then
+    local m linux root_uuid
+    m=$(mktemp -d)
+    mount -o ro "$ESP" "$m" 2>/dev/null \
+      || { rmdir "$m"; die "can't read the EFI partition $ESP (FAT errors?): check it, or make a new one -- nothing was changed"; }
+    # a Linux's kernels, initramfs, microcode, GRUB/systemd-boot/shim
+    linux=$(cd "$m" && find . -maxdepth 3 \( -iname 'vmlinuz-*' -o -iname 'initramfs-*' -o -iname '*-ucode.img' \
+                -o -ipath './grub' -o -ipath './loader' -o -ipath './efi/*/grubx64.efi' -o -ipath './efi/*/shimx64.efi' \
+                -o -ipath './efi/*/systemd-bootx64.efi' \) ! -ipath './efi/boot/*' ! -ipath './grub/*' ! -ipath './loader/*' | sort)
+    if [[ -n $linux ]]; then
+      root_uuid=$(lsblk -no UUID "$ROOT" | head -1)
+      if [[ -n $root_uuid && -f $m/grub/grub.cfg ]] && grep -q -- "$root_uuid" "$m/grub/grub.cfg" \
+         && ! grep -vixE './(vmlinuz-linux|initramfs-linux(-fallback)?\.img|(intel|amd)-ucode\.img|grub|EFI/GRUB/grubx64\.efi)' <<<"$linux" | grep -q .; then
+        ESP_CLEAN=(vmlinuz-linux initramfs-linux.img initramfs-linux-fallback.img intel-ucode.img amd-ucode.img grub EFI/GRUB)
+      else
+        umount "$m"; rmdir "$m"
+        while read -r p; do echo "    ${p#./}"; done <<<"$linux" >/dev/tty
+        die "$ESP holds another Linux's boot files (above): hopparch needs an EFI partition of its own (~1G, see 'Next to another system' in the README) -- nothing was changed"
+      fi
+    fi
+    # anything else on it (Windows' files, vendor tools) is someone else's: kept
+    local e d
+    shopt -s nocasematch dotglob nullglob
+    for e in "$m"/*; do
+      case ${e##*/} in
+        vmlinuz-linux|initramfs-linux.img|initramfs-linux-fallback.img|intel-ucode.img|amd-ucode.img|grub)
+          ((${#ESP_CLEAN[@]})) && continue ;;
+        efi)
+          if ((${#ESP_CLEAN[@]})); then
+            for d in "$e"/*; do [[ ${d##*/} == grub ]] || ESP_STATUS=existing; done
+            continue
+          fi ;;
+      esac
+      ESP_STATUS=existing
+    done
+    shopt -u nocasematch dotglob nullglob
+    umount "$m"
     rmdir "$m"
   fi
 
   # what happens to each partition; shown and confirmed in the final summary
   if [[ $ESP_STATUS == existing ]]; then
     ESP_NOTE="has boot files: KEPT, only mounted at /boot"
-    local mib=$(( $(cat "/sys/class/block/${ESP#/dev/}/size") / 2048 ))
-    ((mib >= 400)) || warn "this EFI partition is only ${mib} MiB; kernels may not fit (Windows makes 100 MiB ones)"
   else
     ESP_NOTE="will be FORMATTED (FAT32, /boot)"
   fi
+  ((${#ESP_CLEAN[@]})) && ESP_NOTE+=" -- the earlier hopparch attempt's kernels and GRUB on it are removed first"
   ROOT_NOTE="will be FORMATTED (btrfs)"
   local old
   old=$(lsblk -no FSTYPE "$ROOT")
   if [[ -n $old ]]; then ROOT_NOTE+=" -- its $old data will be erased"; fi
+  if [[ -n $HOME_PART ]]; then
+    HOME_NOTE="will be FORMATTED (btrfs, /home)"
+    old=$(lsblk -no FSTYPE "$HOME_PART")
+    if [[ -n $old ]]; then HOME_NOTE+=" -- its $old data will be erased"; fi
+  fi
 }
 
 
@@ -279,18 +348,37 @@ ask_install_settings() {
   fi
 }
 
+# an earlier attempt's kernels/GRUB on a kept EFI partition, only after the
+# final yes (find_partitions named them)
+clean_esp() {
+  ((${#ESP_CLEAN[@]})) || return 0
+  local m f
+  m=$(mktemp -d)
+  mount "$ESP" "$m"
+  for f in "${ESP_CLEAN[@]}"; do rm -rf "${m:?}/$f"; done
+  umount "$m"
+  rmdir "$m"
+}
+
 # everything in one place, one yes -- after this nothing asks anymore
 confirm_install() {
   say "Ready to install"
   row EFI "$ESP  $(lsblk -dno SIZE "$ESP" | xargs)  $ESP_NOTE"
   row Root "$ROOT  $(lsblk -dno SIZE "$ROOT" | xargs)  $ROOT_NOTE"
-  row Encrypted "$ENCRYPT"
+  [[ -n $HOME_PART ]] && row Home "$HOME_PART  $(lsblk -dno SIZE "$HOME_PART" | xargs)  $HOME_NOTE"
+  if [[ -n $HOME_PART && $ENCRYPT == yes ]]; then row Encrypted "yes: root + /home, one password (/home opens with a key file inside root)"
+  else row Encrypted "$ENCRYPT"; fi
   row Hostname "$HOSTNAME_"
   row Timezone "$TIMEZONE"
   row User "$USERNAME (admin through sudo; root stays locked)"
   row Profile "$PROFILE"
   row Drivers "$(gpu_packages)"
-  row Boot "GRUB, snapshots listed in its menu"
+  row Boot "GRUB, snapshots listed in its menu; other systems too (Windows, another Linux's EFI partition)"
+  # grub-install drops every firmware boot entry with "grub" anywhere in its
+  # line (name or path): another Linux's entry goes, hopparch's comes
+  if efibootmgr 2>/dev/null | grep -qi '^Boot[0-9A-F]\{4\}.*grub'; then
+    row Firmware "boot entries mentioning GRUB (another Linux's?) are replaced by hopparch's; that system stays in hopparch's menu"
+  fi
   ask_no "Install now? The partitions above get formatted" || die "stopped, nothing was changed"
 }
 
@@ -298,7 +386,7 @@ write_config() {
   mkdir -p "$WORK"
   chmod 700 "$WORK"
   ESP="$ESP" ESP_STATUS="$ESP_STATUS" ROOT="$ROOT" ENCRYPT="$ENCRYPT" \
-  HOSTNAME_="$HOSTNAME_" TIMEZONE="$TIMEZONE" PACKAGES="git base-devel $(gpu_packages)" \
+  HOME_PART="$HOME_PART" HOSTNAME_="$HOSTNAME_" TIMEZONE="$TIMEZONE" PACKAGES="git base-devel $(gpu_packages)" \
   python3 - >"$WORK/user_configuration.json" <<'EOF'
 import json, os
 
@@ -319,16 +407,23 @@ def part(dev, obj_id, status, fs, mountpoint, options, flags, subvols):
     }
 
 e = os.environ
+home = e["HOME_PART"]
+root_subvols = [{"name": "@", "mountpoint": "/"}]
+# @home in root, unless /home has a partition of its own
+if not home:
+    root_subvols.append({"name": "@home", "mountpoint": "/home"})
+root_subvols += [
+    {"name": "@log", "mountpoint": "/var/log"},
+    {"name": "@pkg", "mountpoint": "/var/cache/pacman/pkg"},
+]
 parts = [
     part(e["ESP"], "hopparch-efi", e["ESP_STATUS"], "fat32", "/boot", [], ["boot", "esp"], []),
     # snapshots are set up by setup.sh, not archinstall (its preset takes hourly ones)
-    part(e["ROOT"], "hopparch-root", "modify", "btrfs", None, ["compress=zstd"], [], [
-        {"name": "@", "mountpoint": "/"},
-        {"name": "@home", "mountpoint": "/home"},
-        {"name": "@log", "mountpoint": "/var/log"},
-        {"name": "@pkg", "mountpoint": "/var/cache/pacman/pkg"},
-    ]),
+    part(e["ROOT"], "hopparch-root", "modify", "btrfs", None, ["compress=zstd"], [], root_subvols),
 ]
+if home:
+    parts.append(part(home, "hopparch-home", "modify", "btrfs", None, ["compress=zstd"], [],
+                      [{"name": "@home", "mountpoint": "/home"}]))
 # ESP and root may sit on different disks: one entry per disk, never wiped
 devices = {}
 for disk, p in parts:
@@ -339,7 +434,10 @@ disk_config = {
     "device_modifications": [{"device": d, "wipe": False, "partitions": p} for d, p in devices.items()],
 }
 if e["ENCRYPT"] == "yes":
-    disk_config["disk_encryption"] = {"encryption_type": "luks", "partitions": ["hopparch-root"], "lvm_volumes": []}
+    # with /home encrypted too, archinstall puts a key file for it inside the
+    # encrypted root (/etc/cryptsetup-keys.d + crypttab): one password at boot
+    disk_config["disk_encryption"] = {"encryption_type": "luks", "lvm_volumes": [],
+                                      "partitions": ["hopparch-root"] + (["hopparch-home"] if home else [])}
 
 print(json.dumps({
     "archinstall-language": "English",
@@ -383,14 +481,18 @@ EOF
 }
 
 run_archinstall() {
+  # its exit code is only shown: whether the install is complete is decided
+  # by run_setup's fstab check (a config archinstall rejects still exits 0)
+  local rc=0
   if [[ $REVIEW == yes ]]; then
     say "archinstall's menu: check the settings, then choose Install."
     say "When it says 'Installation completed', choose 'Exit archinstall' (not Reboot) -- the desktop setup runs after that."
-    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" || true
+    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" || rc=$?
   else
     say "Installing the base system (archinstall, no questions)"
-    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" --silent || true
+    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" --silent || rc=$?
   fi
+  ((rc == 0)) || warn "archinstall exited with code $rc (its log: /var/log/archinstall/install.log)"
 }
 
 
@@ -415,6 +517,7 @@ choose_profile
 find_partitions
 ask_install_settings
 confirm_install
+clean_esp
 write_config
 run_archinstall
 run_setup

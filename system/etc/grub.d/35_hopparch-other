@@ -1,0 +1,38 @@
+#!/bin/sh
+# hopparch: boot menu entries for other Linux systems on EFI partitions of
+# their own (os-prober can't find an Arch on btrfs subvolumes). Each entry
+# starts that system's own boot loader, so its menu, kernels and snapshots
+# stay its business. Windows comes from os-prober (30_os-prober).
+# Run by grub-mkconfig (after every package update too); prints nothing when
+# there is no other system, and never stops grub-mkconfig.
+
+ESP_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+# ours: the EFI partition mounted at /boot. Unknown = list nothing, rather
+# than offer to "boot" ourselves.
+own=$(findmnt -no UUID /boot 2>/dev/null)
+[ -n "$own" ] || exit 0
+
+lsblk -lpno NAME,PARTTYPE,UUID | while read -r dev type uuid; do
+  [ "$type" = "$ESP_GUID" ] && [ -n "$uuid" ] && [ "$uuid" != "$own" ] || continue
+  m=$(mktemp -d) || continue
+  if ! mount -o ro "$dev" "$m" 2>/dev/null; then rmdir "$m"; continue; fi
+  # boot loaders in EFI/<name>/, not the fallback copy (EFI/BOOT) or Windows
+  find "$m" -maxdepth 3 -ipath "$m/efi/*" \( -iname grubx64.efi -o -iname systemd-bootx64.efi \) \
+       ! -ipath "$m/efi/boot/*" ! -ipath "$m/efi/microsoft/*" | sort | while read -r f; do
+    path=${f#"$m"}
+    # only plain names go into the menu (it is a script GRUB runs)
+    case "$path$uuid$dev" in *[!A-Za-z0-9/._-]*) echo "Skipped (odd characters): $path on $dev" >&2; continue ;; esac
+    name=$(basename "$(dirname "$path")")
+    echo "Found another system's boot loader: $path on $dev" >&2
+    cat <<ENTRY
+menuentry 'Other system: $name ($dev)' {
+	insmod part_gpt
+	insmod fat
+	search --no-floppy --fs-uuid --set=root '$uuid'
+	chainloader '$path'
+}
+ENTRY
+  done
+  umount "$m" && rmdir "$m"
+done
+exit 0

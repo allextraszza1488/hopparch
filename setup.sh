@@ -229,10 +229,34 @@ settings_entries() {
 
 copy_system() {
   say "System files -> /"
-  local src
+  local src mode
   while IFS= read -r -d '' src; do
-    install -D -m644 "$src" "/${src#system/}"
+    # grub-mkconfig only runs executable grub.d scripts (git may drop the x bit)
+    mode=644
+    [[ -x $src || $src == system/etc/grub.d/* ]] && mode=755
+    install -D -m "$mode" "$src" "/${src#system/}"
   done < <(find system -type f -print0)
+}
+
+# Other systems in the boot menu. Windows: GRUB's os-prober, switched on only
+# when there is a Windows partition (it slows every menu update a little).
+# Another Linux on its own EFI partition: /etc/grub.d/35_hopparch-other
+# (system/), always there, silent when there is nothing. The menu itself is
+# rebuilt by snapshots() right after this.
+dual_boot() {
+  [[ -f /etc/default/grub ]] || return 0
+  if lsblk -lno FSTYPE | grep -qixE 'ntfs|bitlocker'; then
+    say "Windows found: adding it to the boot menu"
+    pacman -S --needed --noconfirm os-prober >/dev/null
+    # the package's commented line is switched on; a line you set yourself
+    # (either way) stays as it is
+    if grep -q '^#GRUB_DISABLE_OS_PROBER=' /etc/default/grub; then
+      sed -i 's/^#GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
+    elif ! grep -q '^GRUB_DISABLE_OS_PROBER=' /etc/default/grub; then
+      echo 'GRUB_DISABLE_OS_PROBER=false' >>/etc/default/grub
+    fi
+  fi
+  return 0
 }
 
 services() {
@@ -352,5 +376,6 @@ copy_system
 services
 upkeep
 firewall
+dual_boot
 snapshots
 say "Done. Log out and back in (or reboot): running apps keep the old config until then."
