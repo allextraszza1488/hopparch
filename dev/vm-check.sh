@@ -22,7 +22,7 @@ else
 fi
 
 section "Expected processes"
-for p in Hyprland waybar; do
+for p in Hyprland waybar mako hypridle; do
   pgrep -x "$p" >/dev/null && echo "ok   $p" || echo "MISSING $p"
 done
 
