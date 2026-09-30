@@ -40,12 +40,9 @@ or deletes anything, you do that first.
                                            # slack (LUKS: + another 16M for its header),
                                            # then New: 1G "EFI System" + a "Linux filesystem"
   ```
-  The other system shows up in hopparch's
-  boot menu as "Other system"; its own firmware entry named GRUB is replaced
-  by hopparch's. (The other way round too: running `grub-install` in the
-  other system later takes hopparch's firmware entry; its GRUB menu doesn't
-  list hopparch, so use the firmware's boot menu then, or run hopparch's
-  `grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB` again.)
+  The other system shows up in hopparch's boot menu as "Other system".
+  hopparch gets its own firmware boot entry, first in the boot order; the
+  other system's entry stays, so the firmware's boot menu can start either.
 
 ## Update
 

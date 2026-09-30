@@ -376,11 +376,7 @@ confirm_install() {
   row Profile "$PROFILE"
   row Drivers "$(gpu_packages)"
   row Boot "GRUB, snapshots listed in its menu; other systems too (Windows, another Linux's EFI partition)"
-  # grub-install drops every firmware boot entry with "grub" anywhere in its
-  # line (name or path): another Linux's entry goes, hopparch's comes
-  if efibootmgr 2>/dev/null | grep -qi '^Boot[0-9A-F]\{4\}.*grub'; then
-    row Firmware "boot entries mentioning GRUB (another Linux's?) are replaced by hopparch's; that system stays in hopparch's menu"
-  fi
+  row Firmware "a boot entry for hopparch's GRUB, first in the boot order; other systems' entries stay"
   ask_no "Install now? The partitions above get formatted" || die "stopped, nothing was changed"
 }
 
@@ -497,6 +493,27 @@ run_archinstall() {
   ((rc == 0)) || warn "archinstall exited with code $rc (its log: /var/log/archinstall/install.log)"
 }
 
+# GRUB 2.16's grub-install adds no firmware boot entry when any entry already
+# points at \EFI\GRUB\grubx64.efi -- on any partition, even one that is gone
+# (an earlier install's EFI partition: archinstall re-creates it with a new ID
+# when it formats it). Then the firmware finds nothing to boot. So: make sure
+# an entry points at this EFI partition, else add one named hopparch (efibootmgr
+# puts a new entry first in the boot order). Other entries are left alone.
+boot_entry() {
+  [[ -f /mnt/boot/EFI/GRUB/grubx64.efi ]] || return 0   # no GRUB: run_setup reports the failed install
+  local uuid disk part
+  uuid=$(blkid -p -o value -s PART_ENTRY_UUID "$ESP" || true)
+  disk=/dev/$(basename "$(dirname "$(realpath "/sys/class/block/${ESP#/dev/}")")")
+  part=$(cat "/sys/class/block/${ESP#/dev/}/partition")
+  # efibootmgr prints each entry as: Boot0003* Name  HD(1,GPT,<uuid>,...)/\EFI\GRUB\grubx64.efi
+  if [[ -n $uuid ]] && grep -qiE "$uuid"'.*\\EFI\\GRUB\\grubx64\.efi' <<<"$(efibootmgr 2>/dev/null || true)"; then
+    return 0
+  fi
+  say "Adding the firmware boot entry 'hopparch'"
+  efibootmgr -q --create --disk "$disk" --part "$part" --label hopparch --loader '\EFI\GRUB\grubx64.efi' \
+    || warn "couldn't add the firmware boot entry; if the machine doesn't boot, run this from the ISO: efibootmgr --create --disk $disk --part $part --label hopparch --loader '\\EFI\\GRUB\\grubx64.efi'"
+}
+
 
 # ---------------------------------------------------------------- stage 6: our setup
 # Clone hopparch into the new user's ~/hopparch and run setup.sh inside the new
@@ -522,5 +539,6 @@ confirm_install
 clean_esp
 write_config
 run_archinstall
+boot_entry
 run_setup
 say "All done. Reboot, unlock the disk, then log in on the login screen."
