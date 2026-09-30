@@ -57,6 +57,23 @@ copy_config() {
     # remember what we installed, to recognise your edits next time
     install -m 644 -o "$USER_" -g "$GROUP_" "$src" "$STATE/$rel"
   done < <(find config -type f -print0)
+
+  # files we installed earlier that are gone from the repo: remove them too,
+  # unless you edited them -- no leftovers piling up in ~/.config
+  [[ -d $STATE ]] || return 0
+  local old
+  while IFS= read -r -d '' old; do
+    rel=${old#"$STATE"/}
+    [[ -e config/$rel ]] && continue
+    dst="$HOME_/.config/$rel"
+    if [[ ! -e $dst ]] || cmp -s "$old" "$dst"; then
+      rm -f "$dst"
+      echo "  removed (no longer in hopparch): $dst"
+    else
+      echo "  no longer in hopparch, kept because you edited it: $dst"
+    fi
+    rm -f "$old"
+  done < <(find "$STATE" -type f -print0)
 }
 
 # a same-named entry in ~/.local/share/applications overrides the system one
