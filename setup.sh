@@ -38,7 +38,7 @@ packages() {
     greetd greetd-tuigreet ydotool \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
     ttf-jetbrains-mono-nerd noto-fonts \
-    jq
+    jq pacman-contrib reflector
 }
 
 # The on-screen keyboard (mouse bar's kbd button) comes from the AUR
@@ -177,6 +177,14 @@ EOF
   return 0
 }
 
+# Upkeep once a week, no daemons: old package files cleaned (paccache keeps
+# the last 3 versions), mirror list refreshed (system/etc/xdg/reflector).
+# Parallel builds come from system/etc/makepkg.conf.d.
+upkeep() {
+  say "Weekly upkeep: package cache, mirror list"
+  systemctl enable paccache.timer reflector.timer
+}
+
 firewall() {
   say "Firewall: block everything incoming, allow outgoing"
   pacman -S --needed --noconfirm ufw >/dev/null
@@ -243,6 +251,7 @@ copy_config
 stash_apps
 copy_system
 services
+upkeep
 firewall
 snapshots
 say "Done. Log out and back in (or reboot): running apps keep the old config until then."
