@@ -3,6 +3,9 @@
 # button down, the next press releases it. (Holding a key while pressing
 # another doesn't work in Hyprland, so dragging is a toggle.)
 #   mouse-hold.sh left|right
+# works from anywhere, not only from Hyprland (which also sets it)
+export YDOTOOL_SOCKET=${YDOTOOL_SOCKET:-/run/ydotoold/socket}
+
 case $1 in
   left)  down=0x40 up=0x80 ;;
   right) down=0x41 up=0x81 ;;
