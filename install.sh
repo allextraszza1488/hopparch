@@ -404,7 +404,7 @@ run_setup() {
     || die "archinstall did not finish (no complete /mnt/etc/fstab) -- nothing else was done"
   say "Getting hopparch into ~/hopparch"
   arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q "$REPO_URL" "/home/$USERNAME/hopparch"
-  arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" "$USERNAME"
+  arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" --profile="$PROFILE" "$USERNAME"
 }
 
 

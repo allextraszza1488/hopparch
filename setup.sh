@@ -3,6 +3,8 @@
 # ~/.config and system/ into /.
 #   first install:  install.sh runs it inside the new system
 #   any time later: cd ~/hopparch && git pull && sudo ./setup.sh
+#   switch profile: sudo ./setup.sh --profile=minimal   (or full; remembered
+#                   in ~/.config/hopparch/profile)
 # A config file you changed yourself is kept as <file>.bak-<date> before being
 # replaced; files you never touched are just updated.
 set -euo pipefail
@@ -18,11 +20,22 @@ die() { printf '\e[31mxx  %s\e[0m\n' "$*"; exit 1; }
 # arch-chroot passes the ISO's /run through, and anything "started now" from
 # the chroot (like the firewall) would hit the ISO's own kernel instead.
 booted() { [[ -d /run/systemd/system ]] && ! systemd-detect-virt --quiet --chroot; }
+
+PROFILE_ARG=""
+args=()
+for a in "$@"; do
+  case $a in --profile=*) PROFILE_ARG=${a#--profile=} ;; *) args+=("$a") ;; esac
+done
 # the user whose config this is: argument (from install.sh) or whoever ran sudo
-USER_=${1:-${SUDO_USER:-}}
-[[ -n $USER_ && $USER_ != root ]] || die "usage: sudo ./setup.sh"
+USER_=${args[0]:-${SUDO_USER:-}}
+[[ -n $USER_ && $USER_ != root ]] || die "usage: sudo ./setup.sh [--profile=full|minimal] [user]"
 HOME_=$(getent passwd "$USER_" | cut -d: -f6)
 GROUP_=$(id -gn "$USER_")
+# minimal = plain and light for old machines; full = minimal + gaming, coding
+# tools, media, nicer look. Given now, else what was used last time, else full.
+PROFILE_FILE="$HOME_/.config/hopparch/profile"
+PROFILE=${PROFILE_ARG:-$(cat "$PROFILE_FILE" 2>/dev/null || echo full)}
+[[ $PROFILE == full || $PROFILE == minimal ]] || die "profile must be full or minimal, not '$PROFILE'"
 # copies of what setup.sh installed last time, to tell your edits from ours
 STATE="$HOME_/.local/state/hopparch/installed"
 
@@ -77,11 +90,64 @@ onscreen_keyboard() {
   rm -rf "$tmp"
 }
 
+# The pieces only the full profile has: gaming, coding tools, media, Claude Code.
+# Steam needs the 32-bit repo (multilib), which Arch ships switched off.
+gpu_vendors() {
+  local d
+  for d in /sys/bus/pci/devices/*; do
+    [[ $(cat "$d/class" 2>/dev/null) == 0x03* ]] || continue
+    case $(cat "$d/vendor") in 0x10de) echo nvidia ;; 0x1002) echo amd ;; 0x8086) echo intel ;; esac
+  done | sort -u
+}
+
+full_extras() {
+  say "Full profile: gaming, coding tools, media"
+  if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+    sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
+    pacman -Sy >/dev/null
+  fi
+  local lib32=(lib32-mesa lib32-vulkan-icd-loader) v
+  for v in $(gpu_vendors); do
+    case $v in
+      # the 32-bit half of whatever install.sh chose: NVIDIA's driver, or
+      # nouveau for cards too old for it (nvidia-utils would block nouveau)
+      nvidia) if pacman -Q nvidia-utils >/dev/null 2>&1; then lib32+=(lib32-nvidia-utils); else lib32+=(lib32-vulkan-nouveau); fi ;;
+      amd)    lib32+=(lib32-vulkan-radeon) ;;
+      intel)  lib32+=(lib32-vulkan-intel) ;;
+    esac
+  done
+  pacman -S --needed --noconfirm \
+    steam gamemode lib32-gamemode vulkan-icd-loader "${lib32[@]}" \
+    clang lua-language-server arduino-language-server arduino-cli gdb \
+    mpv imv ffmpegthumbnailer tumbler \
+    nodejs npm
+  # gamemode may raise a game's priority only for members of this group
+  usermod -aG gamemode "$USER_"
+
+  # Claude Code: not in the Arch repos. Installed into ~/.local (already in
+  # fish's PATH), never logged in. A failed download only costs this.
+  if [[ ! -x $HOME_/.local/bin/claude ]]; then
+    runuser -u "$USER_" -- npm install -g --prefix "$HOME_/.local" @anthropic-ai/claude-code >/dev/null \
+      || warn "Claude Code did not install (network?): run ./setup.sh again later"
+  fi
+}
+
+# config/ with the profile's own files (profiles/<name>/config/) laid over it,
+# then copied into ~/.config
 copy_config() {
-  say "Config -> $HOME_/.config"
-  local src rel dst mode
+  say "Config -> $HOME_/.config ($PROFILE profile)"
+  local tree
+  tree=$(mktemp -d)
+  cp -a config/. "$tree"/
+  if [[ -d profiles/$PROFILE/config ]]; then cp -a "profiles/$PROFILE/config/." "$tree"/; fi
+  copy_tree "$tree"
+  rm -rf "$tree"
+}
+
+copy_tree() {
+  local tree=$1 src rel dst mode
   while IFS= read -r -d '' src; do
-    rel=${src#config/}
+    rel=${src#"$tree"/}
     dst="$HOME_/.config/$rel"
     runuser -u "$USER_" -- mkdir -p "$(dirname "$dst")" "$(dirname "$STATE/$rel")"
     # already up to date: don't touch it (apps watching it would reload)
@@ -100,7 +166,9 @@ copy_config() {
     fi
     # remember what we installed, to recognise your edits next time
     install -m 644 -o "$USER_" -g "$GROUP_" "$src" "$STATE/$rel"
-  done < <(find config -type f -print0)
+  done < <(find "$tree" -type f -print0)
+  # which profile this is, for the next ./setup.sh
+  echo "$PROFILE" | runuser -u "$USER_" -- tee "$PROFILE_FILE" >/dev/null
 
   # files we installed earlier that are gone from the repo: remove them too,
   # unless you edited them -- no leftovers piling up in ~/.config
@@ -108,7 +176,7 @@ copy_config() {
   local old
   while IFS= read -r -d '' old; do
     rel=${old#"$STATE"/}
-    [[ -e config/$rel ]] && continue
+    [[ -e $tree/$rel ]] && continue
     dst="$HOME_/.config/$rel"
     if [[ ! -e $dst ]] || cmp -s "$old" "$dst"; then
       rm -f "$dst"
@@ -276,6 +344,7 @@ EOF
 
 packages
 onscreen_keyboard
+[[ $PROFILE == full ]] && full_extras
 copy_config
 stash_apps
 settings_entries

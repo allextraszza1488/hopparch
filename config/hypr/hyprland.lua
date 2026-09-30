@@ -217,3 +217,10 @@ hl.bind(mod .. " + period", yd("click 0xC1"), { description = "Right click" })
 
 -- cheatsheet: every bind above with its description, the nvim keys, fish aliases
 hl.bind(mod .. " + SHIFT + slash", hl.dsp.exec_cmd(scripts .. "/cheatsheet.sh"), { description = "This cheatsheet" })
+
+
+-- what the profile adds (full: animations, blur, rounding, Steam rule). Lives in
+-- profiles/full/config/hypr/profile.lua; minimal has no such file, so this
+-- config alone is the minimal look. pcall: a broken profile file must never
+-- take the rest of the config down.
+pcall(dofile, os.getenv("HOME") .. "/.config/hypr/profile.lua")

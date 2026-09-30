@@ -1,0 +1,5 @@
+// hopparch minimal profile: no CPU/GPU/RAM in the top bar (no polling at all).
+// Replaces the full profile's stats.jsonc: an empty group shows nothing.
+{
+  "group/stats": { "orientation": "horizontal", "modules": [] }
+}
