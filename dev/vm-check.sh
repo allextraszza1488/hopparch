@@ -25,6 +25,21 @@ for p in Hyprland waybar; do
   pgrep -x "$p" >/dev/null && echo "ok   $p" || echo "MISSING $p"
 done
 
+section "Services"
+for s in greetd ydotoold NetworkManager; do
+  printf '%-15s enabled=%s active=%s\n' "$s" "$(systemctl is-enabled $s 2>&1)" "$(systemctl is-active $s 2>&1)"
+done
+[[ -S /run/ydotoold/socket && -O /run/ydotoold/socket ]] && echo "ok   ydotool socket belongs to test" || echo "BAD  ydotool socket"
+
+section "Configs parse"
+fish -n ~/.config/fish/config.fish && echo "ok   fish"
+out=$(nvim --headless -u ~/.config/nvim/init.lua +qa 2>&1); [[ -z $out ]] && echo "ok   nvim" || echo "BAD  nvim: $out"
+fuzzel --check-config >/dev/null 2>&1 && echo "ok   fuzzel" || echo "BAD  fuzzel"
+python3 -c "import json,re,sys; json.loads(re.sub(r'^\s*//.*$','',open(sys.argv[1]).read(),flags=re.M))" ~/.config/waybar/config.jsonc && echo "ok   waybar json"
+for f in ~/.config/scripts/*.sh; do [[ -x $f ]] && bash -n "$f" && echo "ok   $(basename "$f")" || echo "BAD  $f"; done
+[[ $(getent passwd test | cut -d: -f7) == /usr/bin/fish ]] && echo "ok   login shell fish"
+echo "stashed launcher entries: $(grep -l -x '# hopparch-stash' ~/.local/share/applications/*.desktop 2>/dev/null | wc -l)"
+
 section "Memory"
 free -m | awk 'NR==2 {printf "used %d MiB of %d MiB\n", $3, $2}'
 
