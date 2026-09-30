@@ -1,0 +1,9 @@
+# hopparch notifications: 0xyc, flat
+font=JetBrainsMono Nerd Font 11
+background-color=#000000f2
+text-color=#e8e4dc
+border-color=#e8e4dc
+border-size=2
+border-radius=0
+padding=10
+default-timeout=5000

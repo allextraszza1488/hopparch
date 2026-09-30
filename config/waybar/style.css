@@ -12,6 +12,7 @@ window#waybar {
   color: #e8e4dc;
 }
 
+#wireplumber,
 #clock,
 #custom-power {
   padding: 0 10px;

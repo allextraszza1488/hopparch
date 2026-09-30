@@ -1,5 +1,5 @@
 -- hopparch -- Hyprland config (Lua, Hyprland >= 0.55). Reload: SUPER+SHIFT+R
--- Step 1: basics only. Every bind here is from the approved table in DESIGN.md.
+-- Every bind here is from the approved table in DESIGN.md.
 
 local mod      = "SUPER"
 -- -1 = one kitty process for all windows: ~15 MB per extra window instead of ~160
@@ -12,6 +12,11 @@ local scripts  = os.getenv("HOME") .. "/.config/scripts"
 
 hl.on("hyprland.start", function()
   hl.exec_cmd("waybar")
+  -- notifications (screenshot saved, app messages)
+  hl.exec_cmd("mako")
+  -- clipboard history for SUPER+CTRL+V: record every copy, text and images
+  hl.exec_cmd("wl-paste --type text --watch cliphist store")
+  hl.exec_cmd("wl-paste --type image --watch cliphist store")
 end)
 
 
@@ -75,6 +80,24 @@ hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
 -- power menu from the keyboard (the bar's power icon opens the same one)
 hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"))
+
+-- screenshots: path of the saved file is copied (screenshot.sh)
+hl.bind(mod .. " + SHIFT + S",        hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"))
+hl.bind(mod .. " + SHIFT + CTRL + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"))
+-- clipboard history
+hl.bind(mod .. " + CTRL + V", hl.dsp.exec_cmd(scripts .. "/clipboard.sh"))
+
+-- volume keys: 5% steps up to 100%; with SUPER held up to 150% (software
+-- boost, can distort). locked = also work on the lock screen
+local vol = "wpctl set-volume "
+local sink = " @DEFAULT_AUDIO_SINK@ "
+local media = { locked = true, repeating = true }
+hl.bind("XF86AudioRaiseVolume",            hl.dsp.exec_cmd(vol .. "-l 1.0" .. sink .. "5%+"), media)
+hl.bind(mod .. " + XF86AudioRaiseVolume",  hl.dsp.exec_cmd(vol .. "-l 1.5" .. sink .. "5%+"), media)
+hl.bind("XF86AudioLowerVolume",            hl.dsp.exec_cmd(vol .. sink .. "5%-"), media)
+hl.bind(mod .. " + XF86AudioLowerVolume",  hl.dsp.exec_cmd(vol .. sink .. "5%-"), media)
+hl.bind("XF86AudioMute",    hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),   { locked = true })
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
 
 -- apps asking to maximize themselves (firefox does) are ignored; otherwise
 -- every window opened after them inherits "maximized" and covers the rest

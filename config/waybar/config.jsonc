@@ -1,11 +1,21 @@
-// hopparch top bar. So far: clock + power. Later: mouse-bar toggle, volume, stats.
+// hopparch top bar. So far: volume, clock, power. Later: mouse-bar toggle, stats.
 {
   "layer": "top",
   "position": "top",
   "height": 26,
-  "modules-left": [],
+  "modules-left": ["wireplumber"],
   "modules-center": [],
   "modules-right": ["clock", "custom/power"],
+
+  // click = mute, scroll = 5% steps (up to 100%; SUPER+volume key goes to 150%)
+  "wireplumber": {
+    "format": "vol {volume}%",
+    "format-muted": "vol muted",
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "scroll-step": 5,
+    "max-volume": 100,
+    "tooltip": false
+  },
 
   "clock": {
     "format": "{:%a %d-%m-%Y  %H:%M}",
