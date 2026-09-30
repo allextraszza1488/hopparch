@@ -4,9 +4,9 @@ fish_add_path ~/.local/bin
 
 if status is-interactive
     # ls with icons, directories first
-    alias ls 'eza --group-directories-first --icons'
-    alias ll 'eza -l --group-directories-first --icons'
-    alias la 'eza -la --group-directories-first --icons'
+    alias ls 'eza --group-directories-first --icons=auto'
+    alias ll 'eza -l --group-directories-first --icons=auto'
+    alias la 'eza -la --group-directories-first --icons=auto'
     # cat with syntax colors (glow is still there for .md)
     alias cat 'bat --paging=never'
     # cd remembers folders: `cd proj` jumps to ~/Proj from anywhere

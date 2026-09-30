@@ -29,7 +29,7 @@ packages() {
   pacman -S --needed --noconfirm \
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
-    greetd greetd-tuigreet \
+    greetd greetd-tuigreet ydotool \
     ttf-jetbrains-mono-nerd noto-fonts
 }
 
@@ -96,6 +96,25 @@ services() {
     echo "$USER_" >/var/cache/tuigreet/lastuser
     chown greeter:greeter /var/cache/tuigreet/lastuser
   fi
+
+  # mouse from the keyboard/numpad: ydotoold makes a virtual mouse (needs
+  # root for that) and gives this user its socket. Written here, not in
+  # system/, because it needs the user's id.
+  cat >/etc/systemd/system/ydotoold.service <<EOF
+[Unit]
+Description=ydotoold: mouse from the keyboard and numpad (hopparch)
+
+[Service]
+ExecStart=/usr/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-own=$(id -u "$USER_"):$(id -g "$USER_")
+RuntimeDirectory=ydotoold
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable ydotoold.service
+  # start it now too, unless we're inside install.sh's chroot (no systemd running)
+  [[ -d /run/systemd/system ]] && systemctl daemon-reload && systemctl restart ydotoold.service
+  return 0
 }
 
 

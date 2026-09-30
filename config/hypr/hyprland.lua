@@ -40,6 +40,8 @@ hl.config({
   animations = { enabled = false },
   input = {
     kb_layout = "us",
+    -- numpad types numbers at login; NumLock off turns it into the mouse
+    numlock_by_default = true,
     -- focus follows clicks and keys only, never the mouse passing by
     follow_mouse = 0,
   },
@@ -106,3 +108,38 @@ for i = 1, 9 do
   hl.bind(mod .. " + " .. i,         hl.dsp.focus({ workspace = i }))
   hl.bind(mod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
 end
+
+
+-- mouse from the keyboard. ydotool talks to ydotoold, a system service set up
+-- by setup.sh. Both sets below are always on; they don't clash with anything.
+hl.env("YDOTOOL_SOCKET", "/run/ydotoold/socket")
+local mstep = 20  -- pixels per step; holding a key keeps moving
+local held  = { repeating = true }
+local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
+local function move(dx, dy) return yd(("mousemove -x %d -y %d"):format(dx, dy)) end
+
+-- numpad with NumLock OFF (numpad keys then have their own names, separate
+-- from the real arrows):
+--   7 scroll up    8 middle click   9 scroll down
+--   4 left click   5 up             6 right click
+--   1 left         2 down           3 right
+hl.bind("KP_Begin", move(0, -mstep), held)
+hl.bind("KP_Down",  move(0,  mstep), held)
+hl.bind("KP_End",   move(-mstep, 0), held)
+hl.bind("KP_Next",  move( mstep, 0), held)
+hl.bind("KP_Home",  yd("mousemove --wheel -x 0 -y 1"),  held)
+hl.bind("KP_Prior", yd("mousemove --wheel -x 0 -y -1"), held)
+-- left button goes down on press and up on release, so holding 4 drags
+hl.bind("KP_Left",  yd("click 0x40"))
+hl.bind("KP_Left",  yd("click 0x80"), { release = true })
+hl.bind("KP_Right", yd("click 0xC1"))
+hl.bind("KP_Up",    yd("click 0xC2"))
+
+-- any keyboard, numpad or not: SUPER+arrows move, SUPER+. left, SUPER+/ right
+for _, d in ipairs({ { "left", -mstep, 0 }, { "right", mstep, 0 },
+                     { "up", 0, -mstep },   { "down", 0, mstep } }) do
+  hl.bind(mod .. " + " .. d[1], move(d[2], d[3]), held)
+end
+hl.bind(mod .. " + period", yd("click 0x40"))
+hl.bind(mod .. " + period", yd("click 0x80"), { release = true })
+hl.bind(mod .. " + slash",  yd("click 0xC1"))
