@@ -61,7 +61,8 @@ stash_apps() {
   local dir="$HOME_/.local/share/applications" app
   runuser -u "$USER_" -- mkdir -p "$dir"
   # drop our old overrides first, so names removed from the list come back
-  grep -l -x '# hopparch-stash' "$dir"/*.desktop 2>/dev/null | xargs -r rm -f
+  # (|| true: grep finding nothing is fine and must not stop setup.sh)
+  grep -l -x '# hopparch-stash' "$dir"/*.desktop 2>/dev/null | xargs -r rm -f || true
   for app in $STASHED; do
     printf '[Desktop Entry]\n# hopparch-stash\nType=Application\nName=%s\nNoDisplay=true\nHidden=true\n' "$app" \
       | runuser -u "$USER_" -- tee "$dir/$app.desktop" >/dev/null
