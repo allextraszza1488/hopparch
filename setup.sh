@@ -36,6 +36,7 @@ packages() {
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet ydotool \
+    bluez bluez-utils brightnessctl power-profiles-daemon fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
     ttf-jetbrains-mono-nerd noto-fonts \
     jq pacman-contrib reflector
@@ -137,6 +138,27 @@ stash_apps() {
     | runuser -u "$USER_" -- tee "$dir/hopparch-stashed.desktop" >/dev/null
 }
 
+# "Wi-Fi", "Bluetooth"... entries in SUPER+D, all opening settings.sh. Only for
+# hardware this machine has, so a desktop gets no Battery entry. Regenerated
+# on every run, like the stashed apps.
+settings_entries() {
+  say "Settings entries in the launcher"
+  local dir="$HOME_/.local/share/applications" entry name arg have
+  runuser -u "$USER_" -- mkdir -p "$dir"
+  grep -l -x '# hopparch-settings' "$dir"/*.desktop 2>/dev/null | xargs -r rm -f || true
+  # "/" = always (a package we install); the rest need the hardware
+  for entry in "Wi-Fi:wifi:/sys/class/net/*/wireless" "Bluetooth:bluetooth:/sys/class/bluetooth/hci*" \
+               "Brightness:brightness:/sys/class/backlight/*" "Power mode:power:/" \
+               "Battery:battery:/sys/class/power_supply/BAT*" "Specs:specs:/"; do
+    IFS=: read -r name arg have <<<"$entry"
+    # shellcheck disable=SC2086  # $have is a glob on purpose
+    compgen -G $have >/dev/null || continue
+    printf '[Desktop Entry]\n# hopparch-settings\nType=Application\nName=%s\nIcon=preferences-system\nExec=%s %s\n' \
+      "$name" "$HOME_/.config/scripts/settings.sh" "$arg" \
+      | runuser -u "$USER_" -- tee "$dir/hopparch-settings-$arg.desktop" >/dev/null
+  done
+}
+
 copy_system() {
   say "System files -> /"
   local src
@@ -172,6 +194,9 @@ RuntimeDirectory=ydotoold
 WantedBy=multi-user.target
 EOF
   systemctl enable ydotoold.service
+  # power modes (Settings > Power mode); bluetooth only where an adapter exists
+  systemctl enable power-profiles-daemon.service
+  if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then systemctl enable bluetooth.service; fi
   # start it now too, unless we're inside install.sh's chroot
   if booted; then systemctl daemon-reload && systemctl restart ydotoold.service; fi
   return 0
@@ -249,6 +274,7 @@ packages
 onscreen_keyboard
 copy_config
 stash_apps
+settings_entries
 copy_system
 services
 upkeep
