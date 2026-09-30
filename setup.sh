@@ -115,12 +115,12 @@ services() {
     chown greeter:greeter /var/cache/tuigreet/lastuser
   fi
 
-  # mouse from the keyboard/numpad: ydotoold makes a virtual mouse (needs
-  # root for that) and gives this user its socket. Written here, not in
-  # system/, because it needs the user's id.
+  # mouse from the keyboard: ydotoold makes a virtual mouse (needs root for
+  # that) and gives this user its socket. Written here, not in system/,
+  # because it needs the user's id.
   cat >/etc/systemd/system/ydotoold.service <<EOF
 [Unit]
-Description=ydotoold: mouse from the keyboard and numpad (hopparch)
+Description=ydotoold: mouse from the keyboard (hopparch)
 
 [Service]
 ExecStart=/usr/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-own=$(id -u "$USER_"):$(id -g "$USER_")
@@ -135,10 +135,74 @@ EOF
   return 0
 }
 
+# systemd is running = a booted system, not install.sh's chroot
+booted() { [[ -d /run/systemd/system ]]; }
+
+firewall() {
+  say "Firewall: block everything incoming, allow outgoing"
+  pacman -S --needed --noconfirm ufw >/dev/null
+  sed -i -e 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' \
+         -e 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+  sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
+  systemctl enable ufw.service
+  if booted; then ufw --force enable >/dev/null; fi
+  return 0
+}
+
+# Snapshots of / before and after every pacman run, bootable from the GRUB
+# menu. Only for btrfs + GRUB (what install.sh makes). /home is not included:
+# rolling back the system never touches your files.
+snapshots() {
+  if [[ $(findmnt -no FSTYPE /) != btrfs || ! -d /boot/grub ]]; then
+    say "Snapshots: skipped (needs btrfs + GRUB)"
+    return 0
+  fi
+  say "Snapshots: before/after each update, in the boot menu"
+  pacman -S --needed --noconfirm snapper snap-pac grub-btrfs >/dev/null
+
+  if [[ ! -f /etc/snapper/configs/root ]]; then
+    # --no-dbus: works inside install.sh's chroot too
+    snapper --no-dbus -c root create-config /
+  fi
+  # no hourly snapshots; keep the last 10 (= 5 updates, before + after)
+  snapper --no-dbus -c root set-config TIMELINE_CREATE=no NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5
+  systemctl enable snapper-cleanup.timer
+
+  # booting an old snapshot: it's read-only, this hook lays a RAM overlay on
+  # top so the system can start normally
+  if ! grep -q '^HOOKS=.*grub-btrfs-overlayfs' /etc/mkinitcpio.conf; then
+    sed -i 's/^HOOKS=(\(.*\))/HOOKS=(\1 grub-btrfs-overlayfs)/' /etc/mkinitcpio.conf
+    mkinitcpio -P >/dev/null
+  fi
+
+  # new snapshots get into the boot menu right after each update. A pacman
+  # hook instead of grub-btrfs's background daemon: nothing runs in between.
+  # "zzz" sorts after snap-pac's own "zz-snap-pac-post" hook.
+  mkdir -p /etc/pacman.d/hooks
+  cat >/etc/pacman.d/hooks/zzz-hopparch-grub-snapshots.hook <<'EOF'
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Adding the new snapshots to the boot menu (hopparch)
+When = PostTransaction
+Exec = /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg
+Depends = grub
+EOF
+  grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || die "grub-mkconfig failed (boot menu not updated)"
+  return 0
+}
+
 
 packages
 copy_config
 stash_apps
 copy_system
 services
+firewall
+snapshots
 say "Done. Reboot (or log out) to get the login screen."
