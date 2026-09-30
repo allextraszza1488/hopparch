@@ -40,8 +40,8 @@ hl.config({
   animations = { enabled = false },
   input = {
     kb_layout = "us",
-    -- numpad types numbers at login; NumLock off turns it into the mouse
-    numlock_by_default = true,
+    -- NumLock off at login: the numpad is the mouse; NumLock on = numbers
+    numlock_by_default = false,
     -- focus follows clicks and keys only, never the mouse passing by
     follow_mouse = 0,
   },
@@ -60,6 +60,7 @@ hl.bind(mod .. " + B",      hl.dsp.exec_cmd(browser))
 hl.bind(mod .. " + F",      hl.dsp.exec_cmd(files))
 hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(terminal .. " --class btop -e btop"))
 hl.bind(mod .. " + Q",      hl.dsp.window.close())
+hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
 -- power menu from the keyboard (the bar's power icon opens the same one)
 hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"))
@@ -118,7 +119,7 @@ local held  = { repeating = true }
 local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
 local function move(dx, dy) return yd(("mousemove -x %d -y %d"):format(dx, dy)) end
 
--- numpad with NumLock OFF (numpad keys then have their own names, separate
+-- numpad with NumLock OFF, the default at login (numpad keys then have their own names, separate
 -- from the real arrows):
 --   7 scroll up    8 middle click   9 scroll down
 --   4 left click   5 up             6 right click
