@@ -2,7 +2,8 @@
 -- Step 1: basics only. Every bind here is from the approved table in DESIGN.md.
 
 local mod      = "SUPER"
-local terminal = "kitty"
+-- -1 = one kitty process for all windows: ~15 MB per extra window instead of ~160
+local terminal = "kitty -1"
 local launcher = "fuzzel"
 local browser  = "firefox"
 local files    = "thunar"
@@ -60,6 +61,14 @@ hl.bind(mod .. " + Q",      hl.dsp.window.close())
 hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
 -- power menu from the keyboard (the bar's power icon opens the same one)
 hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"))
+
+-- apps asking to maximize themselves (firefox does) are ignored; otherwise
+-- every window opened after them inherits "maximized" and covers the rest
+hl.window_rule({
+  name  = "no-self-maximize",
+  match = { class = ".*" },
+  suppress_event = "maximize",
+})
 
 -- btop floats above everything, on every workspace
 hl.window_rule({
