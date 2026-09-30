@@ -87,6 +87,32 @@ scan() {
   grep -q '\[8086:' <<<"$GPU_LINES" && GPUS+=(intel)
   ((${#GPUS[@]})) || GPUS+=(generic)
 
+  # nvidia-open drives Turing and newer only: PCI ids 1e00 and up (pci.ids;
+  # NVIDIA's open-gpu-kernel-modules list starts at 1e02). Arch has no driver
+  # for older NVIDIA cards any more (legacy ones are AUR-only): those get the
+  # open nouveau driver, unless a newer NVIDIA card is also present.
+  NVIDIA_DRIVER=""
+  local id
+  NVIDIA_MIXED=no
+  while read -r id; do
+    if ((16#$id >= 16#1e00)); then NVIDIA_DRIVER=open; else NVIDIA_DRIVER=${NVIDIA_DRIVER:-nouveau}; NVIDIA_MIXED=old; fi
+  done < <(grep -o '\[10de:[0-9a-f]\{4\}\]' <<<"$GPU_LINES" | cut -c7-10)
+
+  # the GPU Hyprland will draw on: the one with a laptop's built-in panel,
+  # else the firmware's boot GPU (same rule as Hyprland's aquamarine)
+  SCREEN_GPU=""
+  local f vendor=""
+  for f in /sys/class/drm/card*-{eDP,LVDS,DSI}-*/status; do
+    [[ $(cat "$f" 2>/dev/null) == connected ]] || continue
+    vendor=$(cat "${f%%-*}/device/vendor"); break
+  done
+  if [[ -z $vendor ]]; then
+    for f in /sys/bus/pci/devices/*/boot_vga; do
+      [[ $(cat "$f" 2>/dev/null) == 1 ]] && vendor=$(cat "${f%/boot_vga}/vendor")
+    done
+  fi
+  case $vendor in 0x10de) SCREEN_GPU=nvidia ;; 0x1002) SCREEN_GPU=amd ;; 0x8086) SCREEN_GPU=intel ;; esac
+
   # laptop = has a battery, or DMI says portable chassis (8-10, 14, 31, 32)
   LAPTOP=no
   compgen -G '/sys/class/power_supply/BAT*' >/dev/null && LAPTOP=yes
@@ -114,7 +140,14 @@ show_scan() {
     # "00:02.0 VGA compatible controller [0300]: Vendor Model [10de:2d04] (rev a1)" -> "Vendor Model"
     row GPU "$(sed -E 's/^.*\[030[028]\]: //; s/ \[[0-9a-f]{4}:[0-9a-f]{4}\]//; s/ \(rev .*\)$//' <<<"$line")"
   done <<<"$GPU_LINES"
-  ((${#GPUS[@]} > 1)) && row "" "-> hybrid graphics (${GPUS[*]})"
+  ((${#GPUS[@]} > 1)) && row "" "-> hybrid graphics (${GPUS[*]}), screen on: ${SCREEN_GPU:-unknown}"
+  if [[ $NVIDIA_DRIVER == nouveau ]]; then
+    row "" "-> NVIDIA older than GTX 16xx/RTX: open nouveau driver. The desktop works; games"
+    row "" "   are very slow (GTX 9xx/10xx can't clock up). NVIDIA's own driver for them is AUR-only"
+    row "" "   (nvidia-580xx-dkms, Kepler: nvidia-470xx-dkms): install it later if you need it"
+  elif [[ $NVIDIA_MIXED == old ]]; then
+    row "" "-> the older NVIDIA card gets no driver (nvidia-open only drives GTX 16xx/RTX and newer)"
+  fi
   row Laptop "$LAPTOP"
   row Wi-Fi "$WIFI"
   [[ $VIRT != none && -n $VIRT ]] && row VM "$VIRT"
@@ -215,7 +248,14 @@ gpu_packages() {
   local g
   for g in "${GPUS[@]}"; do
     case $g in
-      nvidia) echo nvidia-open libva-nvidia-driver ;;
+      nvidia)
+        if [[ $NVIDIA_DRIVER == open ]]; then
+          echo nvidia-open libva-nvidia-driver
+          # hybrid drawing on the iGPU: prime-run starts a game on NVIDIA
+          if ((${#GPUS[@]} > 1)) && [[ -n $SCREEN_GPU && $SCREEN_GPU != nvidia ]]; then echo nvidia-prime; fi
+        else
+          echo mesa vulkan-nouveau
+        fi ;;
       amd)    echo mesa vulkan-radeon ;;
       intel)  echo mesa vulkan-intel intel-media-driver ;;
       *)      echo mesa ;;

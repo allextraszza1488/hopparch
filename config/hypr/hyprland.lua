@@ -23,6 +23,31 @@ hl.on("hyprland.start", function()
 end)
 
 
+-- NVIDIA drawing the screen: video decoding and GLX go to NVIDIA. The GPU
+-- Hyprland draws on is the one with a laptop's built-in panel, else the
+-- firmware's boot GPU (aquamarine's rule). Not on hybrid laptops drawing on
+-- the iGPU: there these would break video decoding (VA-API). Checked at every
+-- start, so a changed card needs nothing redone.
+local function nvidia_draws_the_screen()
+  local p = io.popen("grep -l '^connected$' /sys/class/drm/card*-eDP-*/status /sys/class/drm/card*-LVDS-*/status" ..
+                     " /sys/class/drm/card*-DSI-*/status 2>/dev/null; grep -l '^1$' /sys/bus/pci/devices/*/boot_vga 2>/dev/null")
+  local first = p and p:read("*l")
+  if p then p:close() end
+  if not first then return false end
+  local card = first:match("^/sys/class/drm/(card%d+)%-")
+  local f = io.open(card and ("/sys/class/drm/" .. card .. "/device/vendor") or (first:gsub("boot_vga$", "vendor")))
+  local vendor = f and f:read("*l")
+  if f then f:close() end
+  local drm = io.open("/sys/module/nvidia_drm")
+  if drm then drm:close() end
+  return vendor == "0x10de" and drm ~= nil
+end
+if nvidia_draws_the_screen() then
+  hl.env("LIBVA_DRIVER_NAME", "nvidia")
+  hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+end
+
+
 -- any monitor: highest refresh rate, automatic scale
 hl.monitor({ output = "", mode = "highrr", position = "auto", scale = "auto" })
 
