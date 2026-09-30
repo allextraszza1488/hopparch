@@ -24,6 +24,8 @@ TESTED_ARCHINSTALL="4.4 4.5"
 WORK=/tmp/hopparch
 # where the new system clones hopparch from (override for testing)
 REPO_URL=${HOPPARCH_REPO:-https://github.com/allextraszza1488/hopparch.git}
+# which branch the new system gets (override for testing: HOPPARCH_BRANCH=next)
+REPO_BRANCH=${HOPPARCH_BRANCH:-main}
 
 # ---------------------------------------------------------------- helpers
 say()  { printf '\e[1m==> %s\e[0m\n' "$*"; }
@@ -505,7 +507,7 @@ run_setup() {
   grep -qE '^[^#].*[[:space:]]/[[:space:]]' /mnt/etc/fstab 2>/dev/null \
     || die "archinstall did not finish (no complete /mnt/etc/fstab) -- nothing else was done"
   say "Getting hopparch into ~/hopparch"
-  arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q "$REPO_URL" "/home/$USERNAME/hopparch"
+  arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q -b "$REPO_BRANCH" "$REPO_URL" "/home/$USERNAME/hopparch"
   arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" --profile="$PROFILE" "$USERNAME"
 }
 
