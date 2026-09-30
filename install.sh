@@ -8,7 +8,7 @@
 set -euo pipefail
 
 # archinstall versions this script was tested against; others get a warning
-TESTED_ARCHINSTALL="4.4"
+TESTED_ARCHINSTALL="4.4 4.5"
 # config + credentials for archinstall; /tmp is RAM on the ISO
 WORK=/tmp/hopparch
 # where the new system clones hopparch from (override for testing)
