@@ -30,7 +30,7 @@ packages() {
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet ydotool \
-    grim slurp wl-clipboard cliphist mako libnotify \
+    grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
     ttf-jetbrains-mono-nerd noto-fonts
 }
 
