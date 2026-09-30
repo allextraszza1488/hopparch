@@ -40,6 +40,10 @@ hl.config({
   animations = { enabled = false },
   input = {
     kb_layout = "us",
+    -- held keys repeat after 0.3 s, 50x per second (defaults: 0.6 s, 25x);
+    -- this is also what makes the SUPER+arrows mouse fast with small steps
+    repeat_delay = 300,
+    repeat_rate = 50,
     -- focus follows clicks and keys only, never the mouse passing by
     follow_mouse = 0,
   },
@@ -121,7 +125,7 @@ end
 -- SUPER+, left click, SUPER+. right click. ydotool talks to ydotoold, a
 -- system service set up by setup.sh.
 hl.env("YDOTOOL_SOCKET", "/run/ydotoold/socket")
-local mstep = 20  -- pixels per step
+local mstep = 4  -- pixels per step: a tap is precise, holding = 200 px/s
 local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
 for _, d in ipairs({ { "left", -mstep, 0 }, { "right", mstep, 0 },
                      { "up", 0, -mstep },   { "down", 0, mstep } }) do
