@@ -2,10 +2,21 @@
 # hopparch installer -- run as root from the Arch ISO, after:
 #   1. Wi-Fi:       iwctl station wlan0 connect "<network>"
 #   2. partitions:  cfdisk /dev/<disk>   (an EFI partition + one root partition)
-# Stages: scan -> profile -> partitions -> archinstall (preset) -> our setup.
+# Stages: scan -> profile -> partitions -> settings -> one summary + y/N ->
+# archinstall (no questions) -> our setup.
 # The script never creates, deletes or wipes partitions; it formats only the
 # ones you confirm.
+#   bash install.sh            ask a few things, confirm once, install
+#   bash install.sh --review   also open archinstall's menu before it installs
 set -euo pipefail
+
+REVIEW=no
+for arg in "$@"; do
+  case $arg in
+    --review) REVIEW=yes ;;
+    *) echo "usage: bash install.sh [--review]"; exit 1 ;;
+  esac
+done
 
 # archinstall versions this script was tested against; others get a warning
 TESTED_ARCHINSTALL="4.4 4.5"
@@ -44,6 +55,11 @@ preflight() {
   [[ -d /run/archiso ]] || die "run this from the Arch ISO, not an installed system"
   ping -c1 -W3 archlinux.org >/dev/null 2>&1 \
     || die "no internet -- connect first: iwctl station wlan0 connect \"<network>\""
+  # the newest archinstall, not the one frozen into the ISO (the ISO's is
+  # still there as a fallback)
+  say "Updating archinstall to the latest version"
+  pacman -Sy --needed --noconfirm archinstall >/dev/null 2>&1 \
+    || warn "could not update archinstall; using the ISO's version"
   local v
   v=$(archinstall --version 2>/dev/null | awk '{print $2}')
   [[ " $TESTED_ARCHINSTALL " == *" $v "* ]] \
@@ -177,19 +193,18 @@ find_partitions() {
     rmdir "$m"
   fi
 
-  say "Partitions"
+  # what happens to each partition; shown and confirmed in the final summary
   if [[ $ESP_STATUS == existing ]]; then
-    row EFI "$ESP  $(lsblk -dno SIZE "$ESP" | xargs)  -- has boot files, KEPT (only mounted at /boot)"
+    ESP_NOTE="has boot files: KEPT, only mounted at /boot"
     local mib=$(( $(cat "/sys/class/block/${ESP#/dev/}/size") / 2048 ))
     ((mib >= 400)) || warn "this EFI partition is only ${mib} MiB; kernels may not fit (Windows makes 100 MiB ones)"
   else
-    row EFI "$ESP  $(lsblk -dno SIZE "$ESP" | xargs)  -- will be FORMATTED (FAT32, /boot)"
+    ESP_NOTE="will be FORMATTED (FAT32, /boot)"
   fi
-  row Root "$ROOT  $(lsblk -dno SIZE "$ROOT" | xargs)  -- will be FORMATTED (btrfs)"
+  ROOT_NOTE="will be FORMATTED (btrfs)"
   local old
   old=$(lsblk -no FSTYPE "$ROOT")
-  [[ -n $old ]] && warn "$ROOT currently holds a $old filesystem -- everything on it will be erased"
-  ask_no "Format as shown?" || die "stopped, nothing was changed"
+  if [[ -n $old ]]; then ROOT_NOTE+=" -- its $old data will be erased"; fi
 }
 
 
@@ -222,6 +237,21 @@ ask_install_settings() {
     ENCRYPT=yes
     LUKS_PW=$(ask_secret "Disk encryption password")
   fi
+}
+
+# everything in one place, one yes -- after this nothing asks anymore
+confirm_install() {
+  say "Ready to install"
+  row EFI "$ESP  $(lsblk -dno SIZE "$ESP" | xargs)  $ESP_NOTE"
+  row Root "$ROOT  $(lsblk -dno SIZE "$ROOT" | xargs)  $ROOT_NOTE"
+  row Encrypted "$ENCRYPT"
+  row Hostname "$HOSTNAME_"
+  row Timezone "$TIMEZONE"
+  row User "$USERNAME (admin through sudo; root stays locked)"
+  row Profile "$PROFILE"
+  row Drivers "$(gpu_packages)"
+  row Boot "GRUB, snapshots listed in its menu"
+  ask_no "Install now? The partitions above get formatted" || die "stopped, nothing was changed"
 }
 
 write_config() {
@@ -313,9 +343,14 @@ EOF
 }
 
 run_archinstall() {
-  say "Starting archinstall: check the settings, then choose Install."
-  say "When it says 'Installation completed', choose 'Exit archinstall' (not Reboot) -- the desktop setup runs after that."
-  archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" || true
+  if [[ $REVIEW == yes ]]; then
+    say "archinstall's menu: check the settings, then choose Install."
+    say "When it says 'Installation completed', choose 'Exit archinstall' (not Reboot) -- the desktop setup runs after that."
+    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" || true
+  else
+    say "Installing the base system (archinstall, no questions)"
+    archinstall --config "$WORK/user_configuration.json" --creds "$WORK/creds.json" --silent || true
+  fi
 }
 
 
@@ -339,7 +374,8 @@ show_scan
 choose_profile
 find_partitions
 ask_install_settings
+confirm_install
 write_config
 run_archinstall
 run_setup
-say "All done. Reboot, unlock the disk, log in, type: start-hyprland"
+say "All done. Reboot, unlock the disk, then log in on the login screen."
