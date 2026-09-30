@@ -119,33 +119,43 @@ end
 -- mouse from the keyboard. ydotool talks to ydotoold, a system service set up
 -- by setup.sh. Both sets below are always on; they don't clash with anything.
 hl.env("YDOTOOL_SOCKET", "/run/ydotoold/socket")
-local mstep = 20  -- pixels per step; holding a key keeps moving
-local held  = { repeating = true }
-local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
-local function move(dx, dy) return yd(("mousemove -x %d -y %d"):format(dx, dy)) end
+-- the virtual mouse moves exactly as told: speed comes from mouse-step.sh,
+-- not from pointer acceleration on top
+hl.device({ name = "ydotoold-virtual-device-1", accel_profile = "flat" })
+hl.device({ name = "ydotoold-virtual-device",   accel_profile = "flat" })
 
--- numpad with NumLock OFF, the default at login (numpad keys then have their own names, separate
--- from the real arrows):
+local held = { repeating = true }
+local function yd(args)   return hl.dsp.exec_cmd("ydotool " .. args) end
+local function step(dx, dy) return hl.dsp.exec_cmd(("%s/mouse-step.sh %d %d"):format(scripts, dx, dy)) end
+local function grab(button) return hl.dsp.exec_cmd(scripts .. "/mouse-hold.sh " .. button) end
+
+-- numpad with NumLock OFF, the default at login (numpad keys then have their
+-- own names, separate from the real arrows):
 --   7 scroll up    8 middle click   9 scroll down
 --   4 left click   5 up             6 right click
 --   1 left         2 down           3 right
-hl.bind("KP_Begin", move(0, -mstep), held)
-hl.bind("KP_Down",  move(0,  mstep), held)
-hl.bind("KP_End",   move(-mstep, 0), held)
-hl.bind("KP_Next",  move( mstep, 0), held)
+--   0 grab/let go left button (drag)   . grab/let go right button
+-- Hold a direction and it speeds up (mouse-step.sh).
 hl.bind("KP_Home",  yd("mousemove --wheel -x 0 -y 1"),  held)
 hl.bind("KP_Prior", yd("mousemove --wheel -x 0 -y -1"), held)
--- left button goes down on press and up on release, so holding 4 drags
-hl.bind("KP_Left",  yd("click 0x40"))
-hl.bind("KP_Left",  yd("click 0x80"), { release = true })
+hl.bind("KP_Left",  yd("click 0xC0"))
 hl.bind("KP_Right", yd("click 0xC1"))
 hl.bind("KP_Up",    yd("click 0xC2"))
-
--- any keyboard, numpad or not: SUPER+arrows move, SUPER+. left, SUPER+/ right
-for _, d in ipairs({ { "left", -mstep, 0 }, { "right", mstep, 0 },
-                     { "up", 0, -mstep },   { "down", 0, mstep } }) do
-  hl.bind(mod .. " + " .. d[1], move(d[2], d[3]), held)
+-- moving and grabbing also work with SUPER held: SUPER+0, move, SUPER+0
+-- moves a window; the same with . resizes it
+for _, m in ipairs({ "", mod .. " + " }) do
+  hl.bind(m .. "KP_Begin",  step(0, -1), held)
+  hl.bind(m .. "KP_Down",   step(0,  1), held)
+  hl.bind(m .. "KP_End",    step(-1, 0), held)
+  hl.bind(m .. "KP_Next",   step( 1, 0), held)
+  hl.bind(m .. "KP_Insert", grab("left"))
+  hl.bind(m .. "KP_Delete", grab("right"))
 end
-hl.bind(mod .. " + period", yd("click 0x40"))
-hl.bind(mod .. " + period", yd("click 0x80"), { release = true })
-hl.bind(mod .. " + slash",  yd("click 0xC1"))
+
+-- any keyboard, numpad or not: SUPER+arrows move, SUPER+, left click, SUPER+. right
+hl.bind(mod .. " + left",  step(-1, 0), held)
+hl.bind(mod .. " + right", step( 1, 0), held)
+hl.bind(mod .. " + up",    step(0, -1), held)
+hl.bind(mod .. " + down",  step(0,  1), held)
+hl.bind(mod .. " + comma",  yd("click 0xC0"))
+hl.bind(mod .. " + period", yd("click 0xC1"))

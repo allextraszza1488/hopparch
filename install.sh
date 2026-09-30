@@ -251,7 +251,7 @@ def part(dev, obj_id, status, fs, mountpoint, options, flags, subvols):
 e = os.environ
 parts = [
     part(e["ESP"], "hopparch-efi", e["ESP_STATUS"], "fat32", "/boot", [], ["boot", "esp"], []),
-    # no @snapshots: archinstall's Snapper option creates /.snapshots itself
+    # snapshots are set up by setup.sh, not archinstall (its preset takes hourly ones)
     part(e["ROOT"], "hopparch-root", "modify", "btrfs", None, ["compress=zstd"], [], [
         {"name": "@", "mountpoint": "/"},
         {"name": "@home", "mountpoint": "/home"},
@@ -267,7 +267,6 @@ for disk, p in parts:
 disk_config = {
     "config_type": "manual_partitioning",
     "device_modifications": [{"device": d, "wipe": False, "partitions": p} for d, p in devices.items()],
-    "btrfs_options": {"snapshot_config": {"type": "Snapper"}},
 }
 if e["ENCRYPT"] == "yes":
     disk_config["disk_encryption"] = {"encryption_type": "luks", "partitions": ["hopparch-root"], "lvm_volumes": []}
@@ -323,8 +322,10 @@ run_archinstall() {
 # Clone hopparch into the new user's ~/hopparch and run setup.sh inside the new
 # system. Later updates: cd ~/hopparch && git pull && sudo ./setup.sh
 run_setup() {
-  [[ -d /mnt/home/$USERNAME ]] \
-    || die "archinstall did not finish (no /mnt/home/$USERNAME) -- nothing else was done"
+  # archinstall writes /etc/fstab as its very last step: no root entry there =
+  # it stopped or failed partway, and setup must not run on a half-made system
+  grep -qE '^[^#].*[[:space:]]/[[:space:]]' /mnt/etc/fstab 2>/dev/null \
+    || die "archinstall did not finish (no complete /mnt/etc/fstab) -- nothing else was done"
   say "Getting hopparch into ~/hopparch"
   arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q "$REPO_URL" "/home/$USERNAME/hopparch"
   arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" "$USERNAME"
