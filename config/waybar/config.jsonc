@@ -1,9 +1,11 @@
-// hopparch top bar. So far: mouse-bar toggle, volume, clock, power. Later: stats.
+// hopparch top bar: mouse-bar toggle, volume, stats, clock, power.
 {
   "layer": "top",
   "position": "top",
   "height": 26,
-  "modules-left": ["custom/mousebar", "wireplumber"],
+  // stats.jsonc defines "group/stats" (CPU, GPU, RAM); the minimal profile empties it
+  "include": ["~/.config/waybar/stats.jsonc"],
+  "modules-left": ["custom/mousebar", "wireplumber", "group/stats"],
   "modules-center": [],
   "modules-right": ["clock", "custom/power"],
 

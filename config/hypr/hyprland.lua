@@ -94,40 +94,41 @@ hl.config({
 
 
 -- apps
-hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal))
-hl.bind(mod .. " + D",      hl.dsp.exec_cmd(launcher))
-hl.bind(mod .. " + B",      hl.dsp.exec_cmd(browser))
-hl.bind(mod .. " + F",      hl.dsp.exec_cmd(files))
+hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal), { description = "Terminal" })
+hl.bind(mod .. " + D",      hl.dsp.exec_cmd(launcher), { description = "Launcher (apps, settings)" })
+hl.bind(mod .. " + B",      hl.dsp.exec_cmd(browser), { description = "Browser" })
+hl.bind(mod .. " + F",      hl.dsp.exec_cmd(files), { description = "File manager" })
 -- btop's own kitty, sized in text cells (btop needs at least 80x24), so it
 -- fits on any screen at any scale
 hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(
   "kitty --class btop -o remember_window_size=no" ..
-  " -o initial_window_width=82c -o initial_window_height=26c -e btop"))
-hl.bind(mod .. " + Q",      hl.dsp.window.close())
-hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }))
-hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
+  " -o initial_window_width=82c -o initial_window_height=26c -e btop"),
+  { description = "System monitor (btop)" })
+hl.bind(mod .. " + Q",      hl.dsp.window.close(), { description = "Close window" })
+hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }), { description = "Fullscreen" })
+hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"), { description = "Reload Hyprland config" })
 -- power menu from the keyboard (the bar's power icon opens the same one)
-hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"))
+hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"), { description = "Power menu" })
 -- lock the screen (hyprlock.conf: black, one line of text, password)
-hl.bind(mod .. " + SHIFT + Escape", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"))
+hl.bind(mod .. " + SHIFT + Escape", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock screen" })
 
 -- screenshots: path of the saved file is copied (screenshot.sh)
-hl.bind(mod .. " + SHIFT + S",        hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"))
-hl.bind(mod .. " + SHIFT + CTRL + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"))
+hl.bind(mod .. " + SHIFT + S",        hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"), { description = "Screenshot: region" })
+hl.bind(mod .. " + SHIFT + CTRL + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"), { description = "Screenshot: whole screen" })
 -- clipboard history
-hl.bind(mod .. " + CTRL + V", hl.dsp.exec_cmd(scripts .. "/clipboard.sh"))
+hl.bind(mod .. " + CTRL + V", hl.dsp.exec_cmd(scripts .. "/clipboard.sh"), { description = "Clipboard history" })
 
 -- volume keys: 5% steps up to 100%; with SUPER held up to 150% (software
 -- boost, can distort). locked = also work on the lock screen
 local vol = "wpctl set-volume "
 local sink = " @DEFAULT_AUDIO_SINK@ "
-local media = { locked = true, repeating = true }
-hl.bind("XF86AudioRaiseVolume",            hl.dsp.exec_cmd(vol .. "-l 1.0" .. sink .. "5%+"), media)
-hl.bind(mod .. " + XF86AudioRaiseVolume",  hl.dsp.exec_cmd(vol .. "-l 1.5" .. sink .. "5%+"), media)
-hl.bind("XF86AudioLowerVolume",            hl.dsp.exec_cmd(vol .. sink .. "5%-"), media)
-hl.bind(mod .. " + XF86AudioLowerVolume",  hl.dsp.exec_cmd(vol .. sink .. "5%-"), media)
-hl.bind("XF86AudioMute",    hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),   { locked = true })
-hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
+local function media(d) return { locked = true, repeating = true, description = d } end
+hl.bind("XF86AudioRaiseVolume",            hl.dsp.exec_cmd(vol .. "-l 1.0" .. sink .. "5%+"), media("Volume up"))
+hl.bind(mod .. " + XF86AudioRaiseVolume",  hl.dsp.exec_cmd(vol .. "-l 1.5" .. sink .. "5%+"), media("Volume up, up to 150%"))
+hl.bind("XF86AudioLowerVolume",            hl.dsp.exec_cmd(vol .. sink .. "5%-"), media("Volume down"))
+hl.bind(mod .. " + XF86AudioLowerVolume",  hl.dsp.exec_cmd(vol .. sink .. "5%-"), media("Volume down"))
+hl.bind("XF86AudioMute",    hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),   { locked = true, description = "Mute" })
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true, description = "Mute microphone" })
 
 -- apps asking to maximize themselves (firefox does) are ignored; otherwise
 -- every window opened after them inherits "maximized" and covers the rest
@@ -155,25 +156,29 @@ for _, d in ipairs({
   { "L", "right", step,  0 },
 }) do
   local key, dir, rx, ry = d[1], d[2], d[3], d[4]
-  hl.bind(mod .. " + " .. key,           hl.dsp.focus({ direction = dir }))
-  hl.bind(mod .. " + SHIFT + " .. key,   hl.dsp.window.move({ direction = dir }))
+  hl.bind(mod .. " + " .. key,           hl.dsp.focus({ direction = dir }),
+          { description = "Focus " .. dir })
+  hl.bind(mod .. " + SHIFT + " .. key,   hl.dsp.window.move({ direction = dir }),
+          { description = "Move window " .. dir })
   hl.bind(mod .. " + CTRL + " .. key,
           hl.dsp.window.resize({ x = rx, y = ry, relative = true }),
-          { repeating = true })
+          { repeating = true, description = "Resize window " .. dir .. " (hold)" })
 end
 
 -- mouse: SUPER + left drag moves, SUPER + right drag resizes. Real mice only:
 -- the keyboard mouse (SUPER+, / SUPER+.) clicks with SUPER still held, and
 -- must click, not grab the window
 local real_mice = { inclusive = false, list = { "ydotoold-virtual-device-1", "ydotoold-virtual-device" } }
-hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, device = real_mice })
-hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, device = real_mice })
+hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, device = real_mice, description = "Move window (drag)" })
+hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, device = real_mice, description = "Resize window (drag)" })
 
 
 -- workspaces 1-9: go there, +SHIFT sends the window there
 for i = 1, 9 do
-  hl.bind(mod .. " + " .. i,         hl.dsp.focus({ workspace = i }))
-  hl.bind(mod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
+  hl.bind(mod .. " + " .. i,         hl.dsp.focus({ workspace = i }),
+          { description = "Go to workspace " .. i })
+  hl.bind(mod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }),
+          { description = "Send window to workspace " .. i })
 end
 
 -- every open window in a list, the last used first: pick one to go there
@@ -204,7 +209,11 @@ local mstep = 4  -- pixels per step: a tap is precise, holding = 200 px/s
 local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
 for _, d in ipairs({ { "left", -mstep, 0 }, { "right", mstep, 0 },
                      { "up", 0, -mstep },   { "down", 0, mstep } }) do
-  hl.bind(mod .. " + " .. d[1], yd(("mousemove -x %d -y %d"):format(d[2], d[3])), { repeating = true })
+  hl.bind(mod .. " + " .. d[1], yd(("mousemove -x %d -y %d"):format(d[2], d[3])),
+          { repeating = true, description = "Mouse cursor " .. d[1] })
 end
-hl.bind(mod .. " + comma",  yd("click 0xC0"))
-hl.bind(mod .. " + period", yd("click 0xC1"))
+hl.bind(mod .. " + comma",  yd("click 0xC0"), { description = "Left click" })
+hl.bind(mod .. " + period", yd("click 0xC1"), { description = "Right click" })
+
+-- cheatsheet: every bind above with its description, the nvim keys, fish aliases
+hl.bind(mod .. " + SHIFT + slash", hl.dsp.exec_cmd(scripts .. "/cheatsheet.sh"), { description = "This cheatsheet" })

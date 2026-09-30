@@ -19,6 +19,13 @@ window#waybar {
   padding: 0 10px;
 }
 
+/* CPU 12% 54° | GPU 30% 61° | RAM 8.1G: thin lines between the parts */
+#cpu, #custom-cpu-temp, #custom-gpu, #memory {
+  padding: 0 4px;
+}
+#cpu { padding-left: 10px; border-left: 1px solid #3a3a38; }
+#custom-gpu, #memory { border-left: 1px solid #3a3a38; padding-left: 10px; }
+
 #custom-mousebar:hover,
 #custom-power:hover {
   background: #3a3a38;

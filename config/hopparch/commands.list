@@ -1,0 +1,9 @@
+# Commands worth remembering: shown under "commands" in the cheatsheet
+# (SUPER+SHIFT+/). One per line: the command, two or more spaces, what it does.
+cd ~/hopparch && git pull && sudo ./setup.sh   update hopparch (config + packages)
+sudo pacman -Syu                               update the system (snapshots before + after)
+snapper -c root list                           list the system snapshots (also in the boot menu)
+sudo ufw status                                firewall state (all incoming blocked)
+hyprctl reload                                 reload the Hyprland config
+cliphist wipe                                  clear the clipboard history
+ss -tulpn                                      what listens on the network (should be nothing)
