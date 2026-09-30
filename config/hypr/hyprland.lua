@@ -4,6 +4,14 @@
 local mod      = "SUPER"
 local terminal = "kitty"
 local launcher = "fuzzel"
+local browser  = "firefox"
+local files    = "thunar"
+local scripts  = os.getenv("HOME") .. "/.config/scripts"
+
+
+hl.on("hyprland.start", function()
+  hl.exec_cmd("waybar")
+end)
 
 
 -- any monitor: highest refresh rate, automatic scale
@@ -45,11 +53,23 @@ hl.config({
 -- apps
 hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mod .. " + D",      hl.dsp.exec_cmd(launcher))
+hl.bind(mod .. " + B",      hl.dsp.exec_cmd(browser))
+hl.bind(mod .. " + F",      hl.dsp.exec_cmd(files))
+hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(terminal .. " --class btop -e btop"))
 hl.bind(mod .. " + Q",      hl.dsp.window.close())
 hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 hl.bind(mod .. " + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
--- temporary way out until the power menu exists
-hl.bind(mod .. " + SHIFT + E", hl.dsp.exit())
+-- power menu from the keyboard (the bar's power icon opens the same one)
+hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/power-menu.sh"))
+
+-- btop floats above everything, on every workspace
+hl.window_rule({
+  name  = "btop",
+  match = { class = "^(btop)$" },
+  float = true,
+  pin   = true,
+  size  = { "monitor_w*0.6", "monitor_h*0.7" },
+})
 
 
 -- windows: hjkl = focus, +SHIFT = move, +CTRL = resize (hold)

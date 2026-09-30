@@ -1,0 +1,20 @@
+// hopparch top bar. So far: clock + power. Later: mouse-bar toggle, volume, stats.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 26,
+  "modules-left": [],
+  "modules-center": [],
+  "modules-right": ["clock", "custom/power"],
+
+  "clock": {
+    "format": "{:%a %d-%m-%Y  %H:%M}",
+    "tooltip": false
+  },
+
+  "custom/power": {
+    "format": "⏻",
+    "on-click": "$HOME/.config/scripts/power-menu.sh",
+    "tooltip": false
+  }
+}

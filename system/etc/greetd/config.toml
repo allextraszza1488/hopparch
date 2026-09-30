@@ -1,0 +1,7 @@
+# hopparch login screen: tuigreet in the text console, starts Hyprland after login
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --remember --asterisks --cmd start-hyprland"
+user = "greeter"

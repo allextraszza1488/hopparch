@@ -1,8 +1,10 @@
 #!/bin/bash
-# hopparch setup -- installs the packages and copies config/ into one user's ~/.config.
+# hopparch setup -- installs the packages, copies config/ into one user's
+# ~/.config and system/ into /.
 #   first install:  install.sh runs it inside the new system
 #   any time later: cd ~/hopparch && git pull && sudo ./setup.sh
-# A config file you changed locally is kept as <file>.bak-<date> before being replaced.
+# A config file you changed yourself is kept as <file>.bak-<date> before being
+# replaced; files you never touched are just updated.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -15,31 +17,55 @@ USER_=${1:-${SUDO_USER:-}}
 [[ -n $USER_ && $USER_ != root ]] || die "usage: sudo ./setup.sh"
 HOME_=$(getent passwd "$USER_" | cut -d: -f6)
 GROUP_=$(id -gn "$USER_")
+# copies of what setup.sh installed last time, to tell your edits from ours
+STATE="$HOME_/.local/state/hopparch/installed"
 
 
 packages() {
   say "Packages"
   pacman -S --needed --noconfirm \
-    hyprland xdg-desktop-portal-hyprland \
-    kitty fuzzel \
+    hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
+    fish eza zoxide fzf bat glow neovim btop firefox thunar \
+    greetd greetd-tuigreet \
     ttf-jetbrains-mono-nerd noto-fonts
 }
 
 copy_config() {
   say "Config -> $HOME_/.config"
-  local src dst
+  local src rel dst mode
   while IFS= read -r -d '' src; do
-    dst="$HOME_/.config/${src#config/}"
-    runuser -u "$USER_" -- mkdir -p "$(dirname "$dst")"
-    if [[ -f $dst ]] && ! cmp -s "$src" "$dst"; then
+    rel=${src#config/}
+    dst="$HOME_/.config/$rel"
+    runuser -u "$USER_" -- mkdir -p "$(dirname "$dst")" "$(dirname "$STATE/$rel")"
+    # changed since we last installed it = your edit, keep it
+    if [[ -f $dst ]] && ! cmp -s "$src" "$dst" && ! cmp -s "$dst" "$STATE/$rel" 2>/dev/null; then
       mv "$dst" "$dst.bak-$(date +%F-%H%M%S)"
       echo "  kept your version: $dst.bak-*"
     fi
-    install -m644 -o "$USER_" -g "$GROUP_" "$src" "$dst"
+    mode=644
+    [[ -x $src ]] && mode=755
+    install -m "$mode" -o "$USER_" -g "$GROUP_" "$src" "$dst"
+    install -m 644 -o "$USER_" -g "$GROUP_" "$src" "$STATE/$rel"
   done < <(find config -type f -print0)
+}
+
+copy_system() {
+  say "System files -> /"
+  local src
+  while IFS= read -r -d '' src; do
+    install -D -m644 "$src" "/${src#system/}"
+  done < <(find system -type f -print0)
+}
+
+services() {
+  say "Shell + login screen"
+  [[ $(getent passwd "$USER_" | cut -d: -f7) == /usr/bin/fish ]] || chsh -s /usr/bin/fish "$USER_"
+  systemctl enable greetd.service
 }
 
 
 packages
 copy_config
-say "Done. Log in on the text console and type: start-hyprland"
+copy_system
+services
+say "Done. Reboot (or log out) to get the login screen."
