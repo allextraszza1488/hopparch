@@ -1,0 +1,23 @@
+// hopparch mouse bar: a thin bar on the left edge, so the mouse can do what
+// the keys do. Shown/hidden by the icon at the top-left of the top bar (it
+// isn't running while hidden). Every button is one hyprctl command, so what it
+// starts belongs to Hyprland, not to this bar: hiding the bar closes nothing.
+// kbd: the first click starts the keyboard, later clicks hide/show it
+// (SIGRTMIN); it stays running, so a latched Shift/Super is never left stuck.
+// ◀ ▶: the open workspaces of this monitor, round and round.
+{
+  "layer": "top",
+  "position": "left",
+  "width": 36,
+  "spacing": 4,
+  "modules-left": ["custom/apps", "custom/kbd", "custom/scratch", "custom/browser", "custom/settings", "custom/windows"],
+  "modules-right": ["custom/prev", "custom/next"],
+  "custom/apps": { "format": "󰀻", "tooltip-format": "Apps (SUPER+D)", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"fuzzel\")'" },
+  "custom/kbd": { "format": "󰌌", "tooltip-format": "On-screen keyboard", "on-click": "pkill --signal RTMIN -x wvkbd-deskintl || hyprctl dispatch 'hl.dsp.exec_cmd(\"wvkbd-deskintl -L 280\")'" },
+  "custom/scratch": { "format": "󰆍", "tooltip-format": "Scratchpad (SUPER+SHIFT+P)", "on-click": "hyprctl dispatch 'hl.dsp.workspace.toggle_special(\"scratch\")'" },
+  "custom/browser": { "format": "󰖟", "tooltip-format": "Browser (SUPER+B)", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"firefox\")'" },
+  "custom/settings": { "format": "󰒓", "tooltip-format": "Settings", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"$HOME/.config/scripts/settings.sh\")'" },
+  "custom/windows": { "format": "󰖲", "tooltip-format": "Windows list (SUPER+Tab)", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"$HOME/.config/scripts/windows.sh\")'" },
+  "custom/prev": { "format": "◀", "tooltip-format": "Previous workspace", "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'" },
+  "custom/next": { "format": "▶", "tooltip-format": "Next workspace", "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'" }
+}

@@ -9,6 +9,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 say() { printf '\e[1m==> %s\e[0m\n' "$*"; }
+warn() { printf '\e[33m!!  %s\e[0m\n' "$*"; }
 die() { printf '\e[31mxx  %s\e[0m\n' "$*"; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run it with sudo: sudo ./setup.sh"
@@ -31,7 +32,43 @@ packages() {
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet ydotool \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
-    ttf-jetbrains-mono-nerd noto-fonts
+    ttf-jetbrains-mono-nerd noto-fonts \
+    jq
+}
+
+# The on-screen keyboard (mouse bar's kbd button) comes from the AUR
+# (wvkbd-deskintl, the desktop layout): built as the user, since makepkg
+# refuses root. Rebuilt only when the AUR version differs from the installed
+# one (pacman -Syu never updates AUR packages). A failed build (no internet?)
+# only costs the keyboard, so setup goes on.
+AUR=${HOPPARCH_AUR:-https://aur.archlinux.org}
+# empty = always the latest AUR version (owner's choice); a commit id pins it
+WVKBD_AUR_COMMIT=""
+onscreen_keyboard() {
+  local tmp ver deps
+  tmp=$(mktemp -d)
+  chown "$USER_" "$tmp"
+  if ! runuser -u "$USER_" -- env HOME="$HOME_" git clone -q "$AUR/wvkbd-deskintl.git" "$tmp/wvkbd" ||
+     { [[ -n $WVKBD_AUR_COMMIT ]] && ! runuser -u "$USER_" -- env HOME="$HOME_" git -C "$tmp/wvkbd" checkout -q "$WVKBD_AUR_COMMIT"; }; then
+    warn "could not get wvkbd from the AUR: no on-screen keyboard until the next ./setup.sh"
+    rm -rf "$tmp"; return 0
+  fi
+  ver=$(awk '$1 == "pkgver" {v = $3} $1 == "pkgrel" {r = $3} END {print v "-" r}' "$tmp/wvkbd/.SRCINFO")
+  if [[ $(pacman -Q wvkbd-deskintl 2>/dev/null) == "wvkbd-deskintl $ver" ]]; then
+    rm -rf "$tmp"; return 0
+  fi
+  say "On-screen keyboard: building wvkbd-deskintl $ver from the AUR"
+  # what it needs to build and run, as the package itself lists it
+  deps=$(awk '$1 == "depends" || $1 == "makedepends" {print $3}' "$tmp/wvkbd/.SRCINFO" | sed 's/[<>=].*//')
+  # shellcheck disable=SC2086 # one word per package
+  pacman -S --needed --noconfirm base-devel $deps >/dev/null
+  # the package lands in $tmp whatever the user's makepkg.conf says
+  if (cd "$tmp/wvkbd" && runuser -u "$USER_" -- env HOME="$HOME_" PKGDEST="$tmp" PKGEXT=.pkg.tar.zst makepkg --noconfirm); then
+    pacman -U --noconfirm "$tmp"/wvkbd-deskintl-"$ver"-*.pkg.tar.zst
+  else
+    warn "building wvkbd failed (see above): no on-screen keyboard until the next ./setup.sh"
+  fi
+  rm -rf "$tmp"
 }
 
 copy_config() {
@@ -199,6 +236,7 @@ EOF
 
 
 packages
+onscreen_keyboard
 copy_config
 stash_apps
 copy_system

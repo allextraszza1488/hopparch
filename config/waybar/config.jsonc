@@ -1,11 +1,20 @@
-// hopparch top bar. So far: volume, clock, power. Later: mouse-bar toggle, stats.
+// hopparch top bar. So far: mouse-bar toggle, volume, clock, power. Later: stats.
 {
   "layer": "top",
   "position": "top",
   "height": 26,
-  "modules-left": ["wireplumber"],
+  "modules-left": ["custom/mousebar", "wireplumber"],
   "modules-center": [],
   "modules-right": ["clock", "custom/power"],
+
+  // shows/hides the mouse bar (mouse.jsonc) on the left edge. It is started by
+  // Hyprland, not by this bar, so reloading this bar leaves it alone. ^ and
+  // [.] in the pattern: pkill must not match the shell running this very line.
+  "custom/mousebar": {
+    "format": "󰍽",
+    "tooltip-format": "Mouse bar",
+    "on-click": "pkill -f '^waybar -c [^ ]*/mouse[.]jsonc' || hyprctl dispatch 'hl.dsp.exec_cmd(\"waybar -c ~/.config/waybar/mouse.jsonc -s ~/.config/waybar/mouse.css\")'"
+  },
 
   // click = mute, scroll = 5% steps (up to 100%; SUPER+volume key goes to 150%)
   "wireplumber": {

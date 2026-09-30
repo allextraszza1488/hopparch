@@ -11,6 +11,7 @@ local scripts  = os.getenv("HOME") .. "/.config/scripts"
 
 
 hl.on("hyprland.start", function()
+  -- the top bar; its top-left icon shows/hides the mouse bar (waybar/mouse.jsonc)
   hl.exec_cmd("waybar")
   -- notifications (screenshot saved, app messages)
   hl.exec_cmd("mako")
@@ -149,6 +150,25 @@ for i = 1, 9 do
   hl.bind(mod .. " + " .. i,         hl.dsp.focus({ workspace = i }))
   hl.bind(mod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
 end
+
+-- every open window in a list, the last used first: pick one to go there
+-- (the mouse bar's window button opens the same list)
+hl.bind(mod .. " + Tab", hl.dsp.exec_cmd(scripts .. "/windows.sh"), { description = "Windows list" })
+
+-- scratchpad: a hidden workspace shown over the current one. SUPER+SHIFT+P
+-- shows/hides it; whenever it is empty, showing it opens a terminal in it.
+-- SUPER+CTRL+P puts the focused window there (SUPER+SHIFT+1-9 takes it back).
+-- The terminal is found by its class: with kitty -1 the window belongs to the
+-- kitty already running, so Hyprland can't tell it was started for here.
+hl.workspace_rule({ workspace = "special:scratch", on_created_empty = terminal .. " --class scratchpad" })
+hl.window_rule({
+  name      = "scratchpad",
+  match     = { class = "^(scratchpad)$" },
+  workspace = "special:scratch silent",
+})
+hl.bind(mod .. " + SHIFT + P", hl.dsp.workspace.toggle_special("scratch"), { description = "Scratchpad show/hide" })
+hl.bind(mod .. " + CTRL + P", hl.dsp.window.move({ workspace = "special:scratch", follow = false }),
+        { description = "Send window to the scratchpad" })
 
 
 -- mouse from the keyboard: SUPER+arrows move (hold to keep moving),

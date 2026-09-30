@@ -1,0 +1,19 @@
+/* hopparch mouse bar: the top bar's look (style.css), bigger icons */
+@import url("style.css");
+
+* {
+  font-size: 18px;
+}
+
+window#waybar {
+  border-right: 1px solid #3a3a38;
+}
+
+/* every button: waybar gives custom modules the class "module" */
+.module {
+  padding: 8px 0;
+}
+
+.module:hover {
+  background: #3a3a38;
+}

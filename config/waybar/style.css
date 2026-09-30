@@ -12,12 +12,14 @@ window#waybar {
   color: #e8e4dc;
 }
 
+#custom-mousebar,
 #wireplumber,
 #clock,
 #custom-power {
   padding: 0 10px;
 }
 
+#custom-mousebar:hover,
 #custom-power:hover {
   background: #3a3a38;
 }
