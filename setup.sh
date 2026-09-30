@@ -13,6 +13,11 @@ warn() { printf '\e[33m!!  %s\e[0m\n' "$*"; }
 die() { printf '\e[31mxx  %s\e[0m\n' "$*"; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run it with sudo: sudo ./setup.sh"
+
+# A booted system, not install.sh's chroot. systemd running isn't enough:
+# arch-chroot passes the ISO's /run through, and anything "started now" from
+# the chroot (like the firewall) would hit the ISO's own kernel instead.
+booted() { [[ -d /run/systemd/system ]] && ! systemd-detect-virt --quiet --chroot; }
 # the user whose config this is: argument (from install.sh) or whoever ran sudo
 USER_=${1:-${SUDO_USER:-}}
 [[ -n $USER_ && $USER_ != root ]] || die "usage: sudo ./setup.sh"
@@ -167,13 +172,10 @@ RuntimeDirectory=ydotoold
 WantedBy=multi-user.target
 EOF
   systemctl enable ydotoold.service
-  # start it now too, unless we're inside install.sh's chroot (no systemd running)
-  [[ -d /run/systemd/system ]] && systemctl daemon-reload && systemctl restart ydotoold.service
+  # start it now too, unless we're inside install.sh's chroot
+  if booted; then systemctl daemon-reload && systemctl restart ydotoold.service; fi
   return 0
 }
-
-# systemd is running = a booted system, not install.sh's chroot
-booted() { [[ -d /run/systemd/system ]]; }
 
 firewall() {
   say "Firewall: block everything incoming, allow outgoing"
