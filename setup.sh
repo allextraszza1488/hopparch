@@ -196,7 +196,11 @@ EOF
   systemctl enable ydotoold.service
   # power modes (Settings > Power mode); bluetooth only where an adapter exists
   systemctl enable power-profiles-daemon.service
-  if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then systemctl enable bluetooth.service; fi
+  if booted; then systemctl start power-profiles-daemon.service; fi
+  if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then
+    systemctl enable bluetooth.service
+    if booted; then systemctl start bluetooth.service; fi
+  fi
   # start it now too, unless we're inside install.sh's chroot
   if booted; then systemctl daemon-reload && systemctl restart ydotoold.service; fi
   return 0
