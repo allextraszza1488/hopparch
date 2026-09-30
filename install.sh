@@ -4,13 +4,15 @@
 #   2. partitions:  cfdisk /dev/<disk>   (an EFI partition + one root partition)
 # Stages: scan -> profile -> partitions -> archinstall (preset) -> our setup.
 # The script never creates, deletes or wipes partitions; it formats only the
-# ones you confirm. Stage 6 (our setup) is not written yet.
+# ones you confirm.
 set -euo pipefail
 
 # archinstall versions this script was tested against; others get a warning
 TESTED_ARCHINSTALL="4.4"
 # config + credentials for archinstall; /tmp is RAM on the ISO
 WORK=/tmp/hopparch
+# where the new system clones hopparch from (override for testing)
+REPO_URL=${HOPPARCH_REPO:-https://github.com/allextraszza1488/hopparch.git}
 
 # ---------------------------------------------------------------- helpers
 say()  { printf '\e[1m==> %s\e[0m\n' "$*"; }
@@ -317,6 +319,18 @@ run_archinstall() {
 }
 
 
+# ---------------------------------------------------------------- stage 6: our setup
+# Clone hopparch into the new user's ~/hopparch and run setup.sh inside the new
+# system. Later updates: cd ~/hopparch && git pull && sudo ./setup.sh
+run_setup() {
+  [[ -d /mnt/home/$USERNAME ]] \
+    || die "archinstall did not finish (no /mnt/home/$USERNAME) -- nothing else was done"
+  say "Getting hopparch into ~/hopparch"
+  arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q "$REPO_URL" "/home/$USERNAME/hopparch"
+  arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" "$USERNAME"
+}
+
+
 preflight
 scan
 show_scan
@@ -325,4 +339,5 @@ find_partitions
 ask_install_settings
 write_config
 run_archinstall
-say "Next stage (our setup) is not written yet."
+run_setup
+say "All done. Reboot, unlock the disk, log in, type: start-hyprland"
