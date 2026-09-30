@@ -243,4 +243,4 @@ copy_system
 services
 firewall
 snapshots
-say "Done. Reboot (or log out) to get the login screen."
+say "Done. Log out and back in (or reboot): running apps keep the old config until then."
