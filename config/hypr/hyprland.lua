@@ -45,6 +45,11 @@ hl.config({
     -- focus follows clicks and keys only, never the mouse passing by
     follow_mouse = 0,
   },
+  -- no "Hyprland updated" news window, no donation reminder
+  ecosystem = {
+    no_update_news = true,
+    no_donation_nag = true,
+  },
   misc = {
     disable_hyprland_logo = true,
     force_default_wallpaper = 0,
