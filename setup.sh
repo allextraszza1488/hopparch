@@ -36,7 +36,7 @@ packages() {
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet ydotool \
-    bluez bluez-utils brightnessctl power-profiles-daemon fastfetch \
+    bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
     ttf-jetbrains-mono-nerd noto-fonts \
     jq pacman-contrib reflector
