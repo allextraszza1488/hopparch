@@ -20,11 +20,8 @@ GROUP_=$(id -gn "$USER_")
 # copies of what setup.sh installed last time, to tell your edits from ours
 STATE="$HOME_/.local/state/hopparch/installed"
 
-# Launcher entries hidden from SUPER+D. They come with other packages
-# (sound, ffmpeg, waybar, thunar), so they can't be uninstalled. Remove a
-# name here to get its entry back.
-STASHED="avahi-discover bssh bvnc qv4l2 qvidcap xgps xgpsspeed
-         xfce4-about thunar-bulk-rename thunar-settings"
+# launcher entries hidden from SUPER+D (and listed in "Stashed apps")
+STASHED=$(grep -v -e '^#' -e '^\s*$' config/hopparch/stashed.list)
 
 
 packages() {
@@ -74,6 +71,10 @@ stash_apps() {
     printf '[Desktop Entry]\n# hopparch-stash\nType=Application\nName=%s\nNoDisplay=true\nHidden=true\n' "$app" \
       | runuser -u "$USER_" -- tee "$dir/$app.desktop" >/dev/null
   done
+  # the one entry that opens the stashed list
+  printf '[Desktop Entry]\n# hopparch-stash\nType=Application\nName=Stashed apps\nIcon=folder\nExec=%s\n' \
+    "$HOME_/.config/scripts/stashed.sh" \
+    | runuser -u "$USER_" -- tee "$dir/hopparch-stashed.desktop" >/dev/null
 }
 
 copy_system() {

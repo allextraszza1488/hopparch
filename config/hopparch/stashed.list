@@ -1,0 +1,14 @@
+# Apps hidden from SUPER+D. They come with other packages (sound, ffmpeg,
+# waybar, thunar), so they can't be uninstalled; "Stashed apps" in SUPER+D
+# lists them. One name per line: the .desktop file in /usr/share/applications
+# without ".desktop". Delete a line to put the app back in SUPER+D.
+avahi-discover
+bssh
+bvnc
+qv4l2
+qvidcap
+xgps
+xgpsspeed
+xfce4-about
+thunar-bulk-rename
+thunar-settings
