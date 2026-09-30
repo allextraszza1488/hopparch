@@ -43,14 +43,21 @@ copy_config() {
     rel=${src#config/}
     dst="$HOME_/.config/$rel"
     runuser -u "$USER_" -- mkdir -p "$(dirname "$dst")" "$(dirname "$STATE/$rel")"
-    # changed since we last installed it = your edit, keep it
-    if [[ -f $dst ]] && ! cmp -s "$src" "$dst" && ! cmp -s "$dst" "$STATE/$rel" 2>/dev/null; then
-      mv "$dst" "$dst.bak-$(date +%F-%H%M%S)"
-      echo "  kept your version: $dst.bak-*"
+    # already up to date: don't touch it (apps watching it would reload)
+    if ! cmp -s "$src" "$dst" 2>/dev/null; then
+      # differs from what we installed last time = your edit, keep a copy
+      if [[ -f $dst ]] && ! cmp -s "$dst" "$STATE/$rel" 2>/dev/null; then
+        cp -p "$dst" "$dst.bak-$(date +%F-%H%M%S)"
+        echo "  kept your version: $dst.bak-*"
+      fi
+      mode=644
+      [[ -x $src ]] && mode=755
+      # write next to it, then rename over it: the file is never missing, even
+      # for a split second (Hyprland reloads the moment its config changes)
+      install -m "$mode" -o "$USER_" -g "$GROUP_" "$src" "$dst.hopparch-new"
+      mv -f "$dst.hopparch-new" "$dst"
     fi
-    mode=644
-    [[ -x $src ]] && mode=755
-    install -m "$mode" -o "$USER_" -g "$GROUP_" "$src" "$dst"
+    # remember what we installed, to recognise your edits next time
     install -m 644 -o "$USER_" -g "$GROUP_" "$src" "$STATE/$rel"
   done < <(find config -type f -print0)
 }
