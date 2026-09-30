@@ -38,8 +38,8 @@ hl.config({
     disable_hyprland_logo = true,
     force_default_wallpaper = 0,
     background_color = "rgba(000000ff)",
-    -- a new window ends fullscreen instead of taking it over as "maximized"
-    on_focus_under_fullscreen = 2,
+    -- 1 = a new window ends fullscreen (2, the default, takes it over as "maximized")
+    on_focus_under_fullscreen = 1,
   },
 })
 
