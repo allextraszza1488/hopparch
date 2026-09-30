@@ -1,10 +1,11 @@
 #!/bin/bash
 # Health check of the test VM after a change. Read-only: SSH only, never types
 # on the VM's screen. Run on the laptop: dev/vm-check.sh
-# Expects the VM rig from DESIGN.md (user test/test, SSH on 127.0.0.1:2222).
+# Expects the VM rig from DESIGN.md (user test/test, SSH on 127.0.0.1:2222;
+# second VM: PORT=2223 dev/vm-check.sh).
 set -uo pipefail
 
-ssh -p 2222 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+ssh -p "${PORT:-2222}" -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o ConnectTimeout=5 -o LogLevel=ERROR test@127.0.0.1 bash -s <<'EOF'
 sig=$(ls -t /run/user/1000/hypr 2>/dev/null | head -1)
 export HYPRLAND_INSTANCE_SIGNATURE=$sig
