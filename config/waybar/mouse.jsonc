@@ -4,7 +4,8 @@
 // starts belongs to Hyprland, not to this bar: hiding the bar closes nothing.
 // kbd: the first click starts the keyboard, later clicks hide/show it
 // (SIGRTMIN); it stays running, so a latched Shift/Super is never left stuck.
-// ◀ ▶: the open workspaces of this monitor, round and round.
+// ◀ ▶: the open workspaces of this monitor; ▶ on the last one makes a new
+// empty one (scripts/workspace.sh).
 {
   "layer": "top",
   "position": "left",
@@ -18,6 +19,6 @@
   "custom/browser": { "format": "󰖟", "tooltip-format": "Browser (SUPER+B)", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"firefox\")'" },
   "custom/settings": { "format": "󰒓", "tooltip-format": "Settings", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"$HOME/.config/scripts/settings.sh\")'" },
   "custom/windows": { "format": "󰖲", "tooltip-format": "Windows list (SUPER+Tab)", "on-click": "hyprctl dispatch 'hl.dsp.exec_cmd(\"$HOME/.config/scripts/windows.sh\")'" },
-  "custom/prev": { "format": "◀", "tooltip-format": "Previous workspace", "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'" },
-  "custom/next": { "format": "▶", "tooltip-format": "Next workspace", "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'" }
+  "custom/prev": { "format": "◀", "tooltip-format": "Previous workspace", "on-click": "$HOME/.config/scripts/workspace.sh prev" },
+  "custom/next": { "format": "▶", "tooltip-format": "Next workspace (from the last: a new one)", "on-click": "$HOME/.config/scripts/workspace.sh next" }
 }

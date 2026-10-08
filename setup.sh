@@ -124,10 +124,17 @@ full_extras() {
   # gamemode may raise a game's priority only for members of this group
   usermod -aG gamemode "$USER_"
 
-  # Claude Code: not in the Arch repos. Installed into ~/.local (already in
-  # fish's PATH), never logged in. A failed download only costs this.
-  if [[ ! -x $HOME_/.local/bin/claude ]]; then
-    runuser -u "$USER_" -- npm install -g --prefix "$HOME_/.local" @anthropic-ai/claude-code >/dev/null \
+  # Claude Code: not in the Arch repos. Anthropic's native installer puts it in
+  # ~/.local/bin (already in fish's PATH) and it updates itself; never logged
+  # in. Not npm: npm 12 blocks the package's install script, which is what
+  # downloads the real binary ("no native binary"). A broken npm copy from an
+  # earlier setup.sh is removed first. "Works" = `claude --version` answers.
+  # A failed download only costs this.
+  if ! runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1; then
+    rm -rf "$HOME_/.local/lib/node_modules/@anthropic-ai/claude-code"
+    rm -f "$HOME_/.local/bin/claude"
+    runuser -u "$USER_" -- env HOME="$HOME_" bash -c 'curl -fsSL https://claude.ai/install.sh | bash' >/dev/null 2>&1 \
+      && runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1 \
       || warn "Claude Code did not install (network?): run ./setup.sh again later"
   fi
 }
