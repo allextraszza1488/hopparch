@@ -129,6 +129,9 @@ hl.bind("XF86AudioLowerVolume",            hl.dsp.exec_cmd(vol .. sink .. "5%-")
 hl.bind(mod .. " + XF86AudioLowerVolume",  hl.dsp.exec_cmd(vol .. sink .. "5%-"), media("Volume down"))
 hl.bind("XF86AudioMute",    hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),   { locked = true, description = "Mute" })
 hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true, description = "Mute microphone" })
+-- brightness keys: 5% steps, never below 1% (0 = a black screen on some laptops)
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -q set 5%+"), media("Brightness up"))
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -q -n1 set 5%-"), media("Brightness down"))
 
 -- apps asking to maximize themselves (firefox does) are ignored; otherwise
 -- every window opened after them inherits "maximized" and covers the rest
