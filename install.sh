@@ -198,6 +198,21 @@ pick() {
   done
 }
 
+# FAT ESP that will not mount is not empty. Formatting it would wipe boot.
+classify_esp() {
+  ESP_STATUS=modify
+  [[ $(lsblk -no FSTYPE "$ESP") == vfat ]] || return 0
+  local m
+  m=$(mktemp -d)
+  if ! mount -o ro "$ESP" "$m" 2>/dev/null; then
+    rmdir "$m"
+    die "could not look at $ESP (mount failed). Not formatting it."
+  fi
+  [[ -n $(ls -A "$m") ]] && ESP_STATUS=existing
+  umount "$m"
+  rmdir "$m"
+}
+
 find_partitions() {
   [[ $FIRMWARE == UEFI* ]] || die "only UEFI machines are supported for now"
   local esps=() roots=() name type
@@ -215,20 +230,7 @@ find_partitions() {
 
   # An ESP that already holds boot files (Windows, another Linux) is kept as
   # it is and only mounted; an empty or unformatted one gets formatted.
-  # A failed mount is not an empty partition: Windows fast startup and an
-  # already-mounted ESP both refuse the mount, and formatting them wipes boot.
-  ESP_STATUS=modify
-  if [[ $(lsblk -no FSTYPE "$ESP") == vfat ]]; then
-    local m
-    m=$(mktemp -d)
-    if ! mount -o ro "$ESP" "$m" 2>/dev/null; then
-      rmdir "$m"
-      die "could not look at $ESP (mount failed). Not formatting it."
-    fi
-    [[ -n $(ls -A "$m") ]] && ESP_STATUS=existing
-    umount "$m"
-    rmdir "$m"
-  fi
+  classify_esp
 
   # what happens to each partition; shown and confirmed in the final summary
   if [[ $ESP_STATUS == existing ]]; then

@@ -345,9 +345,9 @@ snapshots() {
     mkinitcpio -P >/dev/null
   fi
 
-  # grub-mkconfig walks every boot entry, so this hook is only for the
-  # packages that change the menu. snap-pac still snapshots other installs.
-  # "zzz" sorts after snap-pac's own "zz-snap-pac-post" hook.
+  # snap-pac snapshots every install. The menu has to list that snapshot,
+  # or GRUB cannot boot it. grub-mkconfig walks every EFI entry, so this
+  # hook is slow on purpose. "zzz" sorts after snap-pac's own hook.
   mkdir -p /etc/pacman.d/hooks
   cat >/etc/pacman.d/hooks/zzz-hopparch-grub-snapshots.hook <<'EOF'
 [Trigger]
@@ -355,14 +355,7 @@ Operation = Install
 Operation = Upgrade
 Operation = Remove
 Type = Package
-Target = linux
-Target = linux-lts
-Target = linux-zen
-Target = linux-hardened
-Target = grub
-Target = grub-btrfs
-Target = snapper
-Target = snap-pac
+Target = *
 
 [Action]
 Description = Adding the new snapshots to the boot menu (hopparch)

@@ -38,16 +38,30 @@ wifi() {
   fi
   # known network, or open: just connect. A new locked one asks for a password.
   # A failed retry must not delete a profile that was already saved.
-  local existed=0 pw f
+  # device wifi connect cannot create a WPA3 profile. 802.1X needs a username.
+  local existed=0 pw f sec km
   nmcli -t -f NAME connection show | grep -qxF -- "$ssid" && existed=1
   if [[ $security == open || $existed == 1 ]]; then
     nmcli device wifi connect "$ssid" >/dev/null 2>&1 && note "Connected to $ssid" && return 0
   fi
   [[ $security == open ]] && { note "Could not connect to $ssid"; return 0; }
+  sec=$(nmcli -t --escape no -f SECURITY,SSID device wifi list --rescan no |
+    awk -F: -v s="$ssid" '{
+      name = $0
+      sub(/^[^:]*:/, "", name)
+      if (name == s) { print $1; exit }
+    }')
+  if [[ $sec == *802.1X* ]]; then
+    note "$ssid needs a username" "this menu only has a password"
+    return 0
+  fi
+  km=wpa-psk
+  # WPA2/WPA3 mixed still joins as wpa-psk. WPA3-only does not.
+  [[ $sec == *WPA3* && $sec != *WPA2* && $sec != *WPA1* ]] && km=sae
   pw=$(fuzzel --dmenu --cache=/dev/null --password --prompt "password for $ssid> " --lines 0 </dev/null) || return 0
   [[ -n $pw ]] || return 0
   if [[ $existed == 0 ]]; then
-    nmcli connection add type wifi con-name "$ssid" ssid "$ssid" wifi-sec.key-mgmt wpa-psk >/dev/null
+    nmcli connection add type wifi con-name "$ssid" ssid "$ssid" wifi-sec.key-mgmt "$km" >/dev/null
   fi
   f=$(mktemp)
   chmod 600 "$f"
@@ -142,9 +156,9 @@ bluetooth() {
 brightness() {
   local script=$HOME/.config/scripts/brightness.sh dev now choice actual
   dev=$("$script" device 2>/dev/null) || { note "No screen brightness control here" "(desktop monitors: use their buttons)"; return 0; }
-  # 0 means the driver stored a number and the panel ignored it
+  # The EC device stays at 0 no matter what is written. A real panel can be at 0.
   actual=$(cat "/sys/class/backlight/$dev/actual_brightness" 2>/dev/null || true)
-  if [[ $actual == 0 ]]; then
+  if [[ $dev == nvidia_wmi_ec_backlight && $actual == 0 ]]; then
     show brightness "This control is not wired. The driver stores a number and the panel ignores it."
     return 0
   fi

@@ -13,7 +13,16 @@ fi
 
 move() {
   local src=$1 dest=$2
-  if [[ -L $src || ! -e $src ]]; then
+  if [[ -L $src ]]; then
+    return 0
+  fi
+  # A crash between rm and ln leaves the file only in the vault. Link it back.
+  if [[ ! -e $src ]]; then
+    if [[ -e $dest ]]; then
+      mkdir -p "$(dirname "$src")"
+      ln -s "$dest" "$src"
+      echo "locked $src"
+    fi
     return 0
   fi
   if [[ -e $dest ]]; then

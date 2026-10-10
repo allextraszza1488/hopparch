@@ -27,8 +27,4 @@ EOF
 printf '%s' "$choice" | wl-copy
 # The picker is still the focused window if we type immediately.
 sleep 0.1
-if command -v wtype >/dev/null; then
-  wtype -d 0 -- "$choice" || true
-elif [[ -S ${YDOTOOL_SOCKET:-/run/ydotoold/socket} ]]; then
-  printf '%s' "$choice" | ydotool type --escape 0 --file - || true
-fi
+command -v wtype >/dev/null && wtype -d 0 -- "$choice" || true
