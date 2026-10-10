@@ -6,8 +6,17 @@
   // stats.jsonc defines "group/stats" (CPU, GPU, RAM); the minimal profile empties it
   "include": ["~/.config/waybar/stats.jsonc"],
   "modules-left": ["custom/mousebar", "wireplumber", "group/stats"],
-  "modules-center": [],
+  "modules-center": ["wlr/taskbar"],
   "modules-right": ["clock", "custom/power"],
+
+  // open windows: icon only, one row. Middle click closes.
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": 16,
+    "tooltip-format": "{title}",
+    "on-click": "activate",
+    "on-click-middle": "close"
+  },
 
   // shows/hides the mouse bar (mouse.jsonc) on the left edge. It is started by
   // Hyprland, not by this bar, so reloading this bar leaves it alone. ^ and

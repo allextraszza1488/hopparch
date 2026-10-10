@@ -52,7 +52,23 @@ packages() {
     bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
     ttf-jetbrains-mono-nerd noto-fonts \
-    jq pacman-contrib reflector
+    jq pacman-contrib reflector \
+    gocryptfs rtkit wireless-regdb
+}
+
+# Mullvad on every profile (minimal and full). The package only prints
+# "systemctl enable"; it does not enable the daemon, and the unit looks for
+# ca.crt in /opt/Mullvad VPN/resources/ while the file ships in
+# /usr/lib/mullvad-vpn/. Without both, the app cannot reach the daemon.
+# Autoconnect, lockdown mode, and early-boot blocking stay off: turn those
+# on by hand after install if you want them.
+mullvad_vpn() {
+  say "Mullvad VPN"
+  pacman -S --needed --noconfirm mullvad-vpn
+  mkdir -p "/opt/Mullvad VPN/resources"
+  ln -sfn /usr/lib/mullvad-vpn/ca.crt "/opt/Mullvad VPN/resources/ca.crt"
+  systemctl enable mullvad-daemon.service
+  if booted; then systemctl start mullvad-daemon.service; fi
 }
 
 # The on-screen keyboard (mouse bar's kbd button) comes from the AUR
@@ -349,7 +365,40 @@ EOF
 }
 
 
+# ASUS machines whose panel is drawn by amdgpu can still load
+# nvidia_wmi_ec_backlight. That driver accepts a brightness number and
+# reports actual brightness 0, so the picture never changes. Blacklist it
+# only in that case. The next boot lets amdgpu register amdgpu_bl*.
+# A machine where that driver really controls the panel (actual brightness
+# is not 0), or a desktop with no internal panel, is left alone.
+backlight_fix() {
+  booted || return 0
+  local bl=/sys/class/backlight/nvidia_wmi_ec_backlight
+  [[ -d $bl ]] || return 0
+  [[ $(cat "$bl/actual_brightness" 2>/dev/null || echo 1) == 0 ]] || return 0
+  local conn card driver found=0
+  shopt -s nullglob
+  for conn in /sys/class/drm/card*-eDP-*/status /sys/class/drm/card*-LVDS-*/status; do
+    [[ $(cat "$conn" 2>/dev/null) == connected ]] || continue
+    card=$(basename "$(dirname "$conn")")
+    card=${card%%-*}
+    driver=$(readlink -f "/sys/class/drm/$card/device/driver" 2>/dev/null || true)
+    [[ $driver == */amdgpu ]] && found=1
+  done
+  shopt -u nullglob
+  [[ $found == 1 ]] || return 0
+  say "Backlight: the NVIDIA EC driver is not wired to this AMD panel"
+  cat >/etc/modprobe.d/hopparch-backlight.conf <<'EOF'
+# hopparch: this panel is drawn by amdgpu, and nvidia_wmi_ec_backlight
+# reports actual brightness 0 (writes do not change the picture).
+# Blacklisted so the next boot lets amdgpu register its own backlight.
+blacklist nvidia_wmi_ec_backlight
+EOF
+  warn "screen brightness starts working after the next reboot"
+}
+
 packages
+mullvad_vpn
 onscreen_keyboard
 [[ $PROFILE == full ]] && full_extras
 copy_config
@@ -360,4 +409,5 @@ services
 upkeep
 firewall
 snapshots
+backlight_fix
 say "Done. Log out and back in (or reboot): running apps keep the old config until then."
