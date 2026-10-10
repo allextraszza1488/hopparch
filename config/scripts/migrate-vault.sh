@@ -17,8 +17,16 @@ move() {
     return 0
   fi
   if [[ -e $dest ]]; then
-    echo "already in the vault, left the original: $src"
-    return 0
+    if cmp -s "$src" "$dest"; then
+      rm -f "$src"
+      ln -s "$dest" "$src"
+      echo "locked $src"
+      return 0
+    fi
+    echo "both copies differ, left both:" >&2
+    echo "  $src" >&2
+    echo "  $dest" >&2
+    exit 1
   fi
   mkdir -p "$(dirname "$dest")"
   mv "$src" "$dest"

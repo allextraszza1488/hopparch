@@ -121,6 +121,9 @@ hl.bind(mod .. " + SHIFT + S",        hl.dsp.exec_cmd(scripts .. "/screenshot.sh
 hl.bind(mod .. " + SHIFT + CTRL + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"), { description = "Screenshot: whole screen" })
 -- clipboard history
 hl.bind(mod .. " + CTRL + V", hl.dsp.exec_cmd(scripts .. "/clipboard.sh"), { description = "Clipboard history" })
+-- kaomoji: copied, and typed at the cursor
+hl.bind("CTRL + " .. mod .. " + period", hl.dsp.exec_cmd(scripts .. "/kaomoji.sh"),
+  { description = "Kaomoji" })
 
 -- volume keys: 5% steps up to 100%; with SUPER held up to 150% (software
 -- boost, can distort). locked = also work on the lock screen

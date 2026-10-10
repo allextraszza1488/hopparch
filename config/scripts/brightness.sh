@@ -1,7 +1,8 @@
 #!/bin/bash
-# Screen brightness for the backlight that is actually wired to the panel.
-# nvidia_wmi_ec_backlight on an AMD-driven ASUS panel reports actual
-# brightness 0 and never changes the screen. Prefer amdgpu / intel.
+# Screen brightness for the backlight wired to the panel.
+# Prefer amdgpu / intel when those exist. On an ASUS hybrid laptop the
+# panel is drawn by amdgpu and the brightness still lives on
+# nvidia_wmi_ec_backlight, so that device is used when it is the only one.
 #   brightness.sh get | device | up | down | set 50%
 set -euo pipefail
 

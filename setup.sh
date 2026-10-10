@@ -48,10 +48,10 @@ packages() {
   pacman -S --needed --noconfirm \
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
-    greetd greetd-tuigreet ydotool \
+    greetd greetd-tuigreet ydotool wtype \
     bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
-    ttf-jetbrains-mono-nerd noto-fonts \
+    ttf-jetbrains-mono-nerd noto-fonts adwaita-fonts \
     jq pacman-contrib reflector \
     gocryptfs rtkit wireless-regdb
 }
@@ -60,15 +60,23 @@ packages() {
 # "systemctl enable"; it does not enable the daemon, and the unit looks for
 # ca.crt in /opt/Mullvad VPN/resources/ while the file ships in
 # /usr/lib/mullvad-vpn/. Without both, the app cannot reach the daemon.
-# Autoconnect, lockdown mode, and early-boot blocking stay off: turn those
-# on by hand after install if you want them.
+# Connect only when an account is already set. A fresh install has none,
+# and connecting with no account takes the network down. No lockdown, no
+# location hop.
 mullvad_vpn() {
   say "Mullvad VPN"
   pacman -S --needed --noconfirm mullvad-vpn
   mkdir -p "/opt/Mullvad VPN/resources"
   ln -sfn /usr/lib/mullvad-vpn/ca.crt "/opt/Mullvad VPN/resources/ca.crt"
   systemctl enable mullvad-daemon.service
-  if booted; then systemctl start mullvad-daemon.service; fi
+  if booted; then
+    systemctl start mullvad-daemon.service
+    # shortcut: exit 0 from `account get` means logged in, re-check if the CLI changes
+    if mullvad account get >/dev/null 2>&1; then
+      mullvad auto-connect set on && mullvad connect \
+        || warn "Mullvad: account is set, but it did not connect"
+    fi
+  fi
 }
 
 # The on-screen keyboard (mouse bar's kbd button) comes from the AUR
@@ -106,7 +114,7 @@ onscreen_keyboard() {
   rm -rf "$tmp"
 }
 
-# The pieces only the full profile has: gaming, coding tools, media, Claude Code.
+# The pieces only the full profile has: gaming, coding tools, media.
 # Steam needs the 32-bit repo (multilib), which Arch ships switched off.
 gpu_vendors() {
   local d
@@ -139,20 +147,6 @@ full_extras() {
     nodejs npm
   # gamemode may raise a game's priority only for members of this group
   usermod -aG gamemode "$USER_"
-
-  # Claude Code: not in the Arch repos. Anthropic's native installer puts it in
-  # ~/.local/bin (already in fish's PATH) and it updates itself; never logged
-  # in. Not npm: npm 12 blocks the package's install script, which is what
-  # downloads the real binary ("no native binary"). A broken npm copy from an
-  # earlier setup.sh is removed first. "Works" = `claude --version` answers.
-  # A failed download only costs this.
-  if ! runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1; then
-    rm -rf "$HOME_/.local/lib/node_modules/@anthropic-ai/claude-code"
-    rm -f "$HOME_/.local/bin/claude"
-    runuser -u "$USER_" -- env HOME="$HOME_" bash -c 'curl -fsSL https://claude.ai/install.sh | bash' >/dev/null 2>&1 \
-      && runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1 \
-      || warn "Claude Code did not install (network?): run ./setup.sh again later"
-  fi
 }
 
 # config/ with the profile's own files (profiles/<name>/config/) laid over it,
@@ -177,8 +171,9 @@ copy_tree() {
     if ! cmp -s "$src" "$dst" 2>/dev/null; then
       # differs from what we installed last time = your edit, keep a copy
       if [[ -f $dst ]] && ! cmp -s "$dst" "$STATE/$rel" 2>/dev/null; then
-        cp -p "$dst" "$dst.bak-$(date +%F-%H%M%S)"
-        echo "  kept your version: $dst.bak-*"
+        local bak="$dst.bak-$(date +%F-%H%M%S)"
+        cp -p "$dst" "$bak"
+        echo "  kept your version: $bak"
       fi
       mode=644
       [[ -x $src ]] && mode=755
@@ -350,8 +345,8 @@ snapshots() {
     mkinitcpio -P >/dev/null
   fi
 
-  # new snapshots get into the boot menu right after each update. A pacman
-  # hook instead of grub-btrfs's background daemon: nothing runs in between.
+  # grub-mkconfig walks every boot entry, so this hook is only for the
+  # packages that change the menu. snap-pac still snapshots other installs.
   # "zzz" sorts after snap-pac's own "zz-snap-pac-post" hook.
   mkdir -p /etc/pacman.d/hooks
   cat >/etc/pacman.d/hooks/zzz-hopparch-grub-snapshots.hook <<'EOF'
@@ -360,7 +355,14 @@ Operation = Install
 Operation = Upgrade
 Operation = Remove
 Type = Package
-Target = *
+Target = linux
+Target = linux-lts
+Target = linux-zen
+Target = linux-hardened
+Target = grub
+Target = grub-btrfs
+Target = snapper
+Target = snap-pac
 
 [Action]
 Description = Adding the new snapshots to the boot menu (hopparch)
@@ -373,36 +375,41 @@ EOF
 }
 
 
-# ASUS machines whose panel is drawn by amdgpu can still load
-# nvidia_wmi_ec_backlight. That driver accepts a brightness number and
-# reports actual brightness 0, so the picture never changes. Blacklist it
-# only in that case. The next boot lets amdgpu register amdgpu_bl*.
-# A machine where that driver really controls the panel (actual brightness
-# is not 0), or a desktop with no internal panel, is left alone.
+# The FA506NC panel is drawn by amdgpu. The EC brightness device accepts a
+# number and the picture does not change. amdgpu's automatic path uses AUX,
+# which this panel also ignores. PWM (acpi_backlight=native amdgpu.backlight=0)
+# is the path that moves the backlight. Only that machine: drop the old
+# blacklist there, and rebuild the boot menu when those words are not in it.
+# Other machines are left alone, including a blacklist they still need.
 backlight_fix() {
   booted || return 0
-  local bl=/sys/class/backlight/nvidia_wmi_ec_backlight
-  [[ -d $bl ]] || return 0
-  [[ $(cat "$bl/actual_brightness" 2>/dev/null || echo 1) == 0 ]] || return 0
-  local conn card driver found=0
-  shopt -s nullglob
-  for conn in /sys/class/drm/card*-eDP-*/status /sys/class/drm/card*-LVDS-*/status; do
-    [[ $(cat "$conn" 2>/dev/null) == connected ]] || continue
-    card=$(basename "$(dirname "$conn")")
-    card=${card%%-*}
-    driver=$(readlink -f "/sys/class/drm/$card/device/driver" 2>/dev/null || true)
-    [[ $driver == */amdgpu ]] && found=1
-  done
-  shopt -u nullglob
-  [[ $found == 1 ]] || return 0
-  say "Backlight: the NVIDIA EC driver is not wired to this AMD panel"
-  cat >/etc/modprobe.d/hopparch-backlight.conf <<'EOF'
-# hopparch: this panel is drawn by amdgpu, and nvidia_wmi_ec_backlight
-# reports actual brightness 0 (writes do not change the picture).
-# Blacklisted so the next boot lets amdgpu register its own backlight.
-blacklist nvidia_wmi_ec_backlight
-EOF
-  warn "screen brightness starts working after the next reboot"
+  local conf=/etc/modprobe.d/hopparch-backlight.conf grub=/etc/default/grub product
+  product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+  if [[ $product == *FA506NC* && -f $grub ]]; then
+    if [[ -f $conf ]] && grep -q 'nvidia_wmi_ec_backlight' "$conf"; then
+      rm -f "$conf"
+      say "Backlight: removed the EC driver blacklist"
+    fi
+    local token
+    for token in acpi_backlight=native amdgpu.backlight=0; do
+      grep -Fq "$token" "$grub" && continue
+      sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\\(.*\\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\\1 $token\"/" "$grub"
+    done
+    if ! grep -Fq 'acpi_backlight=native' /boot/grub/grub.cfg \
+      || ! grep -Fq 'amdgpu.backlight=0' /boot/grub/grub.cfg; then
+      grub-mkconfig -o /boot/grub/grub.cfg >/dev/null \
+        && warn "Backlight: PWM mode is set. It starts working after the next reboot" \
+        || warn "Backlight: could not update the boot menu"
+    fi
+    return 0
+  fi
+  [[ -d /sys/class/backlight/nvidia_wmi_ec_backlight ]] && return 0
+  compgen -G '/sys/class/backlight/amdgpu_bl*' >/dev/null && return 0
+  compgen -G '/sys/class/backlight/intel_backlight' >/dev/null && return 0
+  compgen -G '/sys/bus/wmi/devices/603E9613-EF25-4338-A3D0-C46177516DB7*' >/dev/null || return 0
+  modprobe nvidia_wmi_ec_backlight 2>/dev/null \
+    && say "Backlight: EC driver loaded" \
+    || warn "Backlight: EC driver did not load"
 }
 
 packages

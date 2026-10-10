@@ -36,18 +36,41 @@ wifi() {
     [[ $(printf 'Disconnect' | pick "$ssid") ]] && nmcli connection down id "$ssid" >/dev/null && note "Disconnected from $ssid"
     return 0
   fi
-  # known network, or open: just connect. New locked one: ask the password.
-  if [[ $security == open ]] || nmcli -t -f NAME connection show | grep -qxF -- "$ssid"; then
+  # known network, or open: just connect. A new locked one asks for a password.
+  # A failed retry must not delete a profile that was already saved.
+  local existed=0 pw f
+  nmcli -t -f NAME connection show | grep -qxF -- "$ssid" && existed=1
+  if [[ $security == open || $existed == 1 ]]; then
     nmcli device wifi connect "$ssid" >/dev/null 2>&1 && note "Connected to $ssid" && return 0
   fi
-  local pw
+  [[ $security == open ]] && { note "Could not connect to $ssid"; return 0; }
   pw=$(fuzzel --dmenu --cache=/dev/null --password --prompt "password for $ssid> " --lines 0 </dev/null) || return 0
   [[ -n $pw ]] || return 0
-  if nmcli device wifi connect "$ssid" password "$pw" >/dev/null 2>&1; then
+  if [[ $existed == 0 ]]; then
+    nmcli connection add type wifi con-name "$ssid" ssid "$ssid" wifi-sec.key-mgmt wpa-psk >/dev/null
+  fi
+  f=$(mktemp)
+  chmod 600 "$f"
+  trap 'rm -f "$f"' RETURN
+  # nmcli reads this file. The password is not a command argument.
+  printf '802-11-wireless-security.psk:%s\n' "$pw" >"$f"
+  unset pw
+  if nmcli connection up id "$ssid" passwd-file "$f" >/dev/null 2>&1; then
+    python3 - "$ssid" "$f" <<'PY' || true
+import warnings, sys, gi
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+gi.require_version("NM", "1.0")
+from gi.repository import NM
+ssid, path = sys.argv[1], sys.argv[2]
+pw = open(path).read().split(":", 1)[1].rstrip("\n")
+c = NM.Client.new(None)
+conn = next(x for x in c.get_connections() if x.get_id() == ssid)
+conn.get_setting_wireless_security().set_property("psk", pw)
+conn.commit_changes(True, None)
+PY
     note "Connected to $ssid"
   else
-    # don't keep a profile with a wrong password
-    nmcli connection delete id "$ssid" >/dev/null 2>&1 || true
+    [[ $existed == 0 ]] && nmcli connection delete id "$ssid" >/dev/null 2>&1 || true
     note "Could not connect to $ssid" "wrong password?"
   fi
 }
@@ -119,10 +142,13 @@ bluetooth() {
 brightness() {
   local script=$HOME/.config/scripts/brightness.sh dev now choice actual
   dev=$("$script" device 2>/dev/null) || { note "No screen brightness control here" "(desktop monitors: use their buttons)"; return 0; }
+  # 0 means the driver stored a number and the panel ignored it
+  actual=$(cat "/sys/class/backlight/$dev/actual_brightness" 2>/dev/null || true)
+  if [[ $actual == 0 ]]; then
+    show brightness "This control is not wired. The driver stores a number and the panel ignores it."
+    return 0
+  fi
   now=$("$script" get 2>/dev/null) || true
-  actual=$(cat "/sys/class/backlight/$dev/actual_brightness" 2>/dev/null || echo 1)
-  # actual 0: the driver accepted a number and the panel ignored it
-  [[ $actual == 0 ]] && note "Brightness is not wired to this screen yet" "it starts working after the next reboot"
   choice=$(printf '100%%\n75%%\n50%%\n25%%\n10%%' | pick "brightness ${now:-?}" --lines 5 --width 24)
   [[ $choice =~ ^[0-9]+%$ ]] && "$script" set "$choice"
   return 0
