@@ -1,0 +1,12 @@
+[Unit]
+Description=Hopparch: raise the AMD CPU cap when boost is allowed
+After=power-profiles-daemon.service
+ConditionPathExists=/sys/devices/system/cpu/amd_pstate/status
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/local/lib/hopparch/cpu-cap.sh
+
+[Install]
+WantedBy=multi-user.target

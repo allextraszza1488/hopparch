@@ -22,6 +22,8 @@ hl.on("hyprland.start", function()
   -- clipboard history for SUPER+CTRL+V: record every copy, text and images
   hl.exec_cmd("wl-paste --type text --watch cliphist store")
   hl.exec_cmd("wl-paste --type image --watch cliphist store")
+  -- picture at ~/.config/hopparch/wallpaper, if there is one. Otherwise black.
+  hl.exec_cmd(scripts .. "/wallpaper.sh")
 end)
 
 
@@ -89,6 +91,9 @@ hl.config({
   },
   misc = {
     disable_hyprland_logo = true,
+    -- the built-in jokes ("Hyper".replace...) are a fixed list inside Hyprland.
+    -- there is no custom phrase. This turns that line off.
+    disable_splash_rendering = true,
     force_default_wallpaper = 0,
     background_color = "rgba(000000ff)",
   },
@@ -100,11 +105,8 @@ hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal), { description = "Terminal
 hl.bind(mod .. " + D",      hl.dsp.exec_cmd(launcher), { description = "Launcher (apps, settings)" })
 hl.bind(mod .. " + B",      hl.dsp.exec_cmd(browser), { description = "Browser" })
 hl.bind(mod .. " + F",      hl.dsp.exec_cmd(files), { description = "File manager" })
--- btop's own kitty, sized in text cells (btop needs at least 80x24), so it
--- fits on any screen at any scale
-hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(
-  "kitty --class btop -o remember_window_size=no" ..
-  " -o initial_window_width=82c -o initial_window_height=26c -e btop"),
+-- btop, almost the whole screen. btop.sh picks the cell count from this monitor.
+hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(scripts .. "/btop.sh"),
   { description = "System monitor (btop)" })
 hl.bind(mod .. " + Q",      hl.dsp.window.close(), { description = "Close window" })
 hl.bind(mod .. " + M",      hl.dsp.window.fullscreen({ mode = "fullscreen" }), { description = "Fullscreen" })
@@ -144,12 +146,13 @@ hl.window_rule({
   suppress_event = "maximize",
 })
 
--- btop floats above everything, on every workspace
+-- btop floats above everything, on every workspace, in the middle
 hl.window_rule({
-  name  = "btop",
-  match = { class = "^(btop)$" },
-  float = true,
-  pin   = true,
+  name   = "btop",
+  match  = { class = "^(btop)$" },
+  float  = true,
+  pin    = true,
+  center = true,
 })
 
 

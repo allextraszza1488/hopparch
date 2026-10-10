@@ -50,7 +50,7 @@ packages() {
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet ydotool \
     bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
-    grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
+    grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
     ttf-jetbrains-mono-nerd noto-fonts \
     jq pacman-contrib reflector \
     gocryptfs rtkit wireless-regdb
@@ -288,6 +288,14 @@ EOF
   # power modes (Settings > Power mode); bluetooth only where an adapter exists
   systemctl enable power-profiles-daemon.service
   if booted; then systemctl start power-profiles-daemon.service; fi
+  # AMD: if a power profile raises the advertised clock and leaves the cap
+  # behind, reload the driver once at boot. No-op on Intel and when the cap
+  # is already at the advertised max, so a desktop is left alone.
+  if [[ -f /etc/systemd/system/hopparch-cpu-cap.service ]]; then
+    chmod 755 /usr/local/lib/hopparch/cpu-cap.sh
+    chmod 440 /etc/sudoers.d/hopparch-cpu-cap
+    systemctl enable hopparch-cpu-cap.service
+  fi
   if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then
     systemctl enable bluetooth.service
     if booted; then systemctl start bluetooth.service; fi

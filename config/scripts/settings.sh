@@ -134,6 +134,9 @@ power() {
   # power-saver = economy: slower, cooler, longer on battery
   choice=$(powerprofilesctl list | sed -n 's/^[* ] *\([a-z-]*\):$/\1/p' | pick "power mode $now" --lines 3 --width 30)
   [[ -n $choice ]] && powerprofilesctl set "$choice" && note "Power mode: $choice"
+  # the CPU cap can stay at the old clock after the firmware allows boost.
+  # the helper reloads the driver only in that case, and does nothing otherwise.
+  sudo -n /usr/local/lib/hopparch/cpu-cap.sh >/dev/null 2>&1 || true
   return 0
 }
 

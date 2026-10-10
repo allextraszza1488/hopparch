@@ -36,7 +36,9 @@ window#waybar {
   padding: 0 4px;
 }
 #cpu { padding-left: 10px; border-left: 1px solid #3a3a38; }
-#custom-gpu, #memory { border-left: 1px solid #3a3a38; padding-left: 10px; }
+#custom-gpu, #memory, #custom-wifi { border-left: 1px solid #3a3a38; padding-left: 10px; }
+#custom-wifi { padding-right: 8px; }
+#battery { padding: 0 10px; }
 
 #custom-mousebar:hover,
 #custom-power:hover {
