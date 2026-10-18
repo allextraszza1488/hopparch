@@ -1,6 +1,6 @@
 #!/bin/bash
 # Move credential files into the mounted vault and leave symlinks behind.
-# Running this again is safe. ~/.grok/auth.json is left alone while grok is open.
+# Running this again is safe.
 
 set -euo pipefail
 
@@ -47,11 +47,3 @@ move "$HOME/.config/gh/hosts.yml" "$MOUNT/gh/hosts.yml"
 move "$HOME/.claude/.credentials.json" "$MOUNT/claude/credentials.json"
 move "$HOME/.claude.json" "$MOUNT/claude/claude.json"
 move "$HOME/.steam/steam.token" "$MOUNT/steam/steam.token"
-
-if pgrep -x grok >/dev/null; then
-  if [[ -e $HOME/.grok/auth.json && ! -L $HOME/.grok/auth.json ]]; then
-    echo "grok is still open. ~/.grok/auth.json stays put until it exits."
-  fi
-else
-  move "$HOME/.grok/auth.json" "$MOUNT/grok/auth.json"
-fi

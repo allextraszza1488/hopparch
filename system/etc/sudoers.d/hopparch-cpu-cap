@@ -1,2 +1,0 @@
-# hopparch: the power-mode menu may reload amd-pstate when the CPU cap is stuck.
-%wheel ALL=(root) NOPASSWD: /usr/local/lib/hopparch/cpu-cap.sh

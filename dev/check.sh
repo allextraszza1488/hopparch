@@ -44,7 +44,7 @@ root=$1
 tmp=$2
 differ=$tmp/differ
 src=$tmp/differ-src
-mkdir -p "$differ/.config/gh" "$differ/.claude" "$differ/.steam" "$differ/.grok" "$differ/Vault" "$src/gh"
+mkdir -p "$differ/.config/gh" "$differ/.claude" "$differ/.steam" "$differ/Vault" "$src/gh"
 echo only-home > "$differ/.config/gh/hosts.yml"
 echo only-vault > "$src/gh/hosts.yml"
 mount --bind "$src" "$differ/Vault"
@@ -59,7 +59,7 @@ grep -q 'both copies differ' "$tmp/differ.err"
 
 miss=$tmp/miss
 msrc=$tmp/miss-src
-mkdir -p "$miss/.claude" "$miss/.steam" "$miss/.grok" "$miss/Vault" "$msrc/gh"
+mkdir -p "$miss/.claude" "$miss/.steam" "$miss/Vault" "$msrc/gh"
 echo secret > "$msrc/gh/hosts.yml"
 mount --bind "$msrc" "$miss/Vault"
 HOME=$miss bash "$root/config/scripts/migrate-vault.sh" >"$tmp/miss.out"

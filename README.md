@@ -73,5 +73,5 @@ A file you edited is kept as `<file>.bak-<date>`, then replaced with the repo co
 | `setup.sh` | Packages, `config/` into `~/.config`, `system/` into `/`. |
 | `config/` | The desktop: Hyprland, bar, terminal, menus. |
 | `profiles/` | The **full** and **minimal** overlays. |
-| `system/` | greetd, sudo, systemd, reflector. |
+| `system/` | greetd, systemd, reflector, makepkg. |
 | `dev/` | Checks and the test-VM helpers. Not installed. |

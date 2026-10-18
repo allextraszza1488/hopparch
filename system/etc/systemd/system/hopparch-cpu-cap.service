@@ -2,6 +2,7 @@
 Description=Hopparch: raise the AMD CPU cap when boost is allowed
 After=power-profiles-daemon.service
 ConditionPathExists=/sys/devices/system/cpu/amd_pstate/status
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
 
 [Service]
 Type=oneshot

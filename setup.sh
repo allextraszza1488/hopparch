@@ -48,7 +48,7 @@ packages() {
   pacman -S --needed --noconfirm \
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
-    greetd greetd-tuigreet ydotool wtype \
+    greetd greetd-tuigreet wtype \
     bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
     ttf-jetbrains-mono-nerd noto-fonts adwaita-fonts \
@@ -61,8 +61,9 @@ packages() {
 # ca.crt in /opt/Mullvad VPN/resources/ while the file ships in
 # /usr/lib/mullvad-vpn/. Without both, the app cannot reach the daemon.
 # Connect only when an account is already set. A fresh install has none,
-# and connecting with no account takes the network down. No lockdown, no
-# location hop.
+# and connecting with no account takes the network down. With an account:
+# lockdown (nothing leaves outside the VPN, even while it is disconnected)
+# and autoconnect. No location hop.
 mullvad_vpn() {
   say "Mullvad VPN"
   pacman -S --needed --noconfirm mullvad-vpn
@@ -73,8 +74,10 @@ mullvad_vpn() {
     systemctl start mullvad-daemon.service
     # shortcut: exit 0 from `account get` means logged in, re-check if the CLI changes
     if mullvad account get >/dev/null 2>&1; then
-      mullvad auto-connect set on && mullvad connect \
-        || warn "Mullvad: account is set, but it did not connect"
+      mullvad lockdown-mode set on && mullvad auto-connect set on && mullvad connect \
+        || warn "Mullvad: account is set, but lockdown or connect failed"
+    else
+      warn "Mullvad: no account yet. Log in with the Mullvad app, then run ./setup.sh again for lockdown + autoconnect"
     fi
   fi
 }
@@ -265,39 +268,43 @@ services() {
     chown greeter:greeter /var/cache/tuigreet/lastuser
   fi
 
-  # mouse from the keyboard: ydotoold makes a virtual mouse (needs root for
-  # that) and gives this user its socket. Written here, not in system/,
-  # because it needs the user's id.
-  cat >/etc/systemd/system/ydotoold.service <<EOF
-[Unit]
-Description=ydotoold: mouse from the keyboard (hopparch)
-
-[Service]
-ExecStart=/usr/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-own=$(id -u "$USER_"):$(id -g "$USER_")
-RuntimeDirectory=ydotoold
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable ydotoold.service
   # power modes (Settings > Power mode); bluetooth only where an adapter exists
   systemctl enable power-profiles-daemon.service
   if booted; then systemctl start power-profiles-daemon.service; fi
-  # AMD: if a power profile raises the advertised clock and leaves the cap
-  # behind, reload the driver once at boot. No-op on Intel and when the cap
-  # is already at the advertised max, so a desktop is left alone.
+  # AMD laptops: if a power profile raises the advertised clock and leaves the
+  # cap behind, reload the driver once at boot. Laptops only (the unit checks
+  # for a battery too); no-op on Intel and when the cap is already at max.
   if [[ -f /etc/systemd/system/hopparch-cpu-cap.service ]]; then
     chmod 755 /usr/local/lib/hopparch/cpu-cap.sh
-    chmod 440 /etc/sudoers.d/hopparch-cpu-cap
-    systemctl enable hopparch-cpu-cap.service
+    if compgen -G '/sys/class/power_supply/BAT*' >/dev/null; then
+      systemctl enable hopparch-cpu-cap.service
+    else
+      systemctl disable hopparch-cpu-cap.service 2>/dev/null || true
+    fi
   fi
   if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then
     systemctl enable bluetooth.service
     if booted; then systemctl start bluetooth.service; fi
   fi
-  # start it now too, unless we're inside install.sh's chroot
-  if booted; then systemctl daemon-reload && systemctl restart ydotoold.service; fi
   return 0
+}
+
+# What older hopparch versions installed and this one doesn't: removed on the
+# next ./setup.sh, so an updated machine ends up like a fresh install.
+leftovers() {
+  # the keyboard mouse: a root ydotoold service that could type and click
+  # for any program of the user
+  if [[ -f /etc/systemd/system/ydotoold.service ]]; then
+    say "Removing the keyboard mouse (ydotoold)"
+    systemctl disable --now ydotoold.service 2>/dev/null || true
+    rm -f /etc/systemd/system/ydotoold.service
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  if pacman -Q ydotool >/dev/null 2>&1; then
+    pacman -Rns --noconfirm ydotool >/dev/null || warn "could not remove ydotool"
+  fi
+  # the passwordless sudo rule for cpu-cap.sh: nothing gets root without a password
+  rm -f /etc/sudoers.d/hopparch-cpu-cap
 }
 
 # Upkeep once a week, no daemons: old package files cleaned (paccache keeps
@@ -414,6 +421,7 @@ stash_apps
 settings_entries
 copy_system
 services
+leftovers
 upkeep
 firewall
 snapshots

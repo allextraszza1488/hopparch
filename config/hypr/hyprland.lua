@@ -1,5 +1,4 @@
 -- hopparch -- Hyprland config (Lua, Hyprland >= 0.55). Reload: SUPER+SHIFT+R
--- Every bind here is from the approved table in DESIGN.md.
 
 local mod      = "SUPER"
 -- -1 = one kitty process for all windows: ~15 MB per extra window instead of ~160
@@ -11,7 +10,7 @@ local scripts  = os.getenv("HOME") .. "/.config/scripts"
 
 
 hl.on("hyprland.start", function()
-  -- ~/Vault passphrase prompt. Quiet until setup-vault.sh has created the vault.
+  -- ~/Vault passphrase prompt. Quiet until the vault exists (~/.cipher).
   hl.exec_cmd(scripts .. "/unlock-vault.sh")
   -- the top bar; its top-left icon shows/hides the mouse bar (waybar/mouse.jsonc)
   hl.exec_cmd("waybar")
@@ -177,12 +176,9 @@ for _, d in ipairs({
           { repeating = true, description = "Resize window " .. dir .. " (hold)" })
 end
 
--- mouse: SUPER + left drag moves, SUPER + right drag resizes. Real mice only:
--- the keyboard mouse (SUPER+, / SUPER+.) clicks with SUPER still held, and
--- must click, not grab the window
-local real_mice = { inclusive = false, list = { "ydotoold-virtual-device-1", "ydotoold-virtual-device" } }
-hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, device = real_mice, description = "Move window (drag)" })
-hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, device = real_mice, description = "Resize window (drag)" })
+-- mouse: SUPER + left drag moves, SUPER + right drag resizes
+hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, description = "Move window (drag)" })
+hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window (drag)" })
 
 
 -- workspaces 1-9: go there, +SHIFT sends the window there
@@ -212,20 +208,6 @@ hl.bind(mod .. " + SHIFT + P", hl.dsp.workspace.toggle_special("scratch"), { des
 hl.bind(mod .. " + CTRL + P", hl.dsp.window.move({ workspace = "special:scratch", follow = false }),
         { description = "Send window to the scratchpad" })
 
-
--- mouse from the keyboard: SUPER+arrows move (hold to keep moving),
--- SUPER+, left click, SUPER+. right click. ydotool talks to ydotoold, a
--- system service set up by setup.sh.
-hl.env("YDOTOOL_SOCKET", "/run/ydotoold/socket")
-local mstep = 4  -- pixels per step: a tap is precise, holding = 200 px/s
-local function yd(args) return hl.dsp.exec_cmd("ydotool " .. args) end
-for _, d in ipairs({ { "left", -mstep, 0 }, { "right", mstep, 0 },
-                     { "up", 0, -mstep },   { "down", 0, mstep } }) do
-  hl.bind(mod .. " + " .. d[1], yd(("mousemove -x %d -y %d"):format(d[2], d[3])),
-          { repeating = true, description = "Mouse cursor " .. d[1] })
-end
-hl.bind(mod .. " + comma",  yd("click 0xC0"), { description = "Left click" })
-hl.bind(mod .. " + period", yd("click 0xC1"), { description = "Right click" })
 
 -- cheatsheet: every bind above with its description, the nvim keys, fish aliases
 hl.bind(mod .. " + SHIFT + slash", hl.dsp.exec_cmd(scripts .. "/cheatsheet.sh"), { description = "This cheatsheet" })
