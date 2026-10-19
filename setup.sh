@@ -130,16 +130,19 @@ full_extras() {
     sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
     pacman -Sy >/dev/null
   fi
-  local lib32=(lib32-mesa lib32-vulkan-icd-loader) v
+  local lib32=(lib32-mesa lib32-vulkan-icd-loader) v known=no
   for v in $(gpu_vendors); do
     case $v in
       # the 32-bit half of whatever install.sh chose: NVIDIA's driver, or
       # nouveau for cards too old for it (nvidia-utils would block nouveau)
-      nvidia) if pacman -Q nvidia-utils >/dev/null 2>&1; then lib32+=(lib32-nvidia-utils); else lib32+=(lib32-vulkan-nouveau); fi ;;
-      amd)    lib32+=(lib32-vulkan-radeon) ;;
-      intel)  lib32+=(lib32-vulkan-intel) ;;
+      nvidia) known=yes; if pacman -Q nvidia-utils >/dev/null 2>&1; then lib32+=(lib32-nvidia-utils); else lib32+=(lib32-vulkan-nouveau); fi ;;
+      amd)    known=yes; lib32+=(lib32-vulkan-radeon) ;;
+      intel)  known=yes; lib32+=(lib32-vulkan-intel) ;;
     esac
   done
+  # no known GPU (a VM, ...): Mesa's software Vulkan. Without a named driver,
+  # Steam's "some Vulkan driver" dependency makes pacman pick NVIDIA's.
+  [[ $known == yes ]] || lib32+=(vulkan-swrast lib32-vulkan-swrast)
   pacman -S --needed --noconfirm \
     steam gamemode lib32-gamemode vulkan-icd-loader "${lib32[@]}" \
     clang lua-language-server arduino-language-server arduino-cli gdb \
