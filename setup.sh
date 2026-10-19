@@ -56,27 +56,18 @@ packages() {
     gocryptfs rtkit wireless-regdb
 }
 
-# Mullvad on every profile (minimal and full). The package only prints
-# "systemctl enable"; it does not enable the daemon, and the unit looks for
-# ca.crt in /opt/Mullvad VPN/resources/ while the file ships in
-# /usr/lib/mullvad-vpn/. Without both, the app cannot reach the daemon.
-# Connect only when an account is already set. A fresh install has none,
-# and connecting with no account takes the network down. No lockdown, no
-# location hop.
+# Mullvad on every profile (minimal and full): installed so its app works,
+# nothing configured. The package only prints "systemctl enable"; it does not
+# enable the daemon, and the unit looks for ca.crt in /opt/Mullvad VPN/resources/
+# while the file ships in /usr/lib/mullvad-vpn/. Without both, the app cannot
+# reach the daemon. Logging in, connecting and lockdown are left to you.
 mullvad_vpn() {
   say "Mullvad VPN"
   pacman -S --needed --noconfirm mullvad-vpn
   mkdir -p "/opt/Mullvad VPN/resources"
   ln -sfn /usr/lib/mullvad-vpn/ca.crt "/opt/Mullvad VPN/resources/ca.crt"
   systemctl enable mullvad-daemon.service
-  if booted; then
-    systemctl start mullvad-daemon.service
-    # shortcut: exit 0 from `account get` means logged in, re-check if the CLI changes
-    if mullvad account get >/dev/null 2>&1; then
-      mullvad auto-connect set on && mullvad connect \
-        || warn "Mullvad: account is set, but it did not connect"
-    fi
-  fi
+  if booted; then systemctl start mullvad-daemon.service; fi
 }
 
 # The on-screen keyboard (mouse bar's kbd button) comes from the AUR
