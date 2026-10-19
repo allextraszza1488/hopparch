@@ -16,7 +16,7 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("waybar")
   -- notifications (screenshot saved, app messages)
   hl.exec_cmd("mako")
-  -- lock before any sleep; laptops sleep after 10 min idle (hypridle.conf)
+  -- lock after 5 min idle and before any sleep; laptops sleep after 10 min (hypridle.conf)
   hl.exec_cmd("hypridle")
   -- clipboard history for SUPER+CTRL+V: record every copy, text and images
   hl.exec_cmd("wl-paste --type text --watch cliphist store")
