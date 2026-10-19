@@ -23,7 +23,9 @@ nvim_keys() {
   # nvim loads the user's config, then prints its keymaps that have a desc (sid -8 = nvim's own defaults, left out)
   timeout 5 nvim --headless '+lua for _, mode in ipairs({ "n", "v", "i", "t" }) do
       for _, m in ipairs(vim.api.nvim_get_keymap(mode)) do
-        if m.desc and m.sid ~= -8 then io.stdout:write(string.format("%-28s %s\n", mode .. "  " .. vim.fn.keytrans(m.lhs), m.desc)) end
+        -- lhsraw is the keys as typed; lhs is already written out, and running
+        -- that through keytrans again turns "<Tab>" into "<lt>Tab>"
+        if m.desc and m.sid ~= -8 then io.stdout:write(string.format("%-28s %s\n", mode .. "  " .. vim.fn.keytrans(m.lhsraw or m.lhs), m.desc)) end
       end
     end' +qa 2>/dev/null
 }

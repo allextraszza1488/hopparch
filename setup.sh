@@ -146,6 +146,7 @@ full_extras() {
   pacman -S --needed --noconfirm \
     steam gamemode lib32-gamemode vulkan-icd-loader "${lib32[@]}" \
     clang lua-language-server arduino-language-server arduino-cli gdb \
+    tree-sitter-bash tree-sitter-python \
     mpv imv ffmpegthumbnailer tumbler \
     nodejs npm
   # gamemode may raise a game's priority only for members of this group
