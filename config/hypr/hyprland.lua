@@ -18,9 +18,9 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("mako")
   -- lock before any sleep; laptops sleep after 10 min idle (hypridle.conf)
   hl.exec_cmd("hypridle")
-  -- clipboard history for SUPER+CTRL+V: record every copy, text and images
-  hl.exec_cmd("wl-paste --type text --watch cliphist store")
-  hl.exec_cmd("wl-paste --type image --watch cliphist store")
+  -- clipboard history for SUPER+CTRL+V: record every copy, text and images.
+  -- Wiped first at every login, so nothing copied lasts past a restart.
+  hl.exec_cmd("cliphist wipe; wl-paste --type text --watch cliphist store & wl-paste --type image --watch cliphist store")
   -- picture at ~/.config/hopparch/wallpaper, if there is one. Otherwise black.
   hl.exec_cmd(scripts .. "/wallpaper.sh")
 end)

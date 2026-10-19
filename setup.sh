@@ -49,7 +49,7 @@ packages() {
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
     greetd greetd-tuigreet wtype \
-    bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
+    brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
     ttf-jetbrains-mono-nerd noto-fonts adwaita-fonts \
     jq pacman-contrib reflector \
@@ -61,9 +61,8 @@ packages() {
 # ca.crt in /opt/Mullvad VPN/resources/ while the file ships in
 # /usr/lib/mullvad-vpn/. Without both, the app cannot reach the daemon.
 # Connect only when an account is already set. A fresh install has none,
-# and connecting with no account takes the network down. With an account:
-# lockdown (nothing leaves outside the VPN, even while it is disconnected)
-# and autoconnect. No location hop.
+# and connecting with no account takes the network down. No lockdown, no
+# location hop.
 mullvad_vpn() {
   say "Mullvad VPN"
   pacman -S --needed --noconfirm mullvad-vpn
@@ -74,10 +73,8 @@ mullvad_vpn() {
     systemctl start mullvad-daemon.service
     # shortcut: exit 0 from `account get` means logged in, re-check if the CLI changes
     if mullvad account get >/dev/null 2>&1; then
-      mullvad lockdown-mode set on && mullvad auto-connect set on && mullvad connect \
-        || warn "Mullvad: account is set, but lockdown or connect failed"
-    else
-      warn "Mullvad: no account yet. Log in with the Mullvad app, then run ./setup.sh again for lockdown + autoconnect"
+      mullvad auto-connect set on && mullvad connect \
+        || warn "Mullvad: account is set, but it did not connect"
     fi
   fi
 }
@@ -282,7 +279,16 @@ services() {
       systemctl disable hopparch-cpu-cap.service 2>/dev/null || true
     fi
   fi
+  # Bluetooth only where an adapter exists, and off until it is turned on in
+  # Settings > Bluetooth: the adapter stays unpowered at every boot
   if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then
+    pacman -S --needed --noconfirm bluez bluez-utils >/dev/null
+    local bt=/etc/bluetooth/main.conf
+    if grep -q '^#\?AutoEnable *=' "$bt"; then
+      sed -i 's/^#\?AutoEnable *=.*/AutoEnable=false/' "$bt"
+    else
+      printf '\n[Policy]\nAutoEnable=false\n' >>"$bt"
+    fi
     systemctl enable bluetooth.service
     if booted; then systemctl start bluetooth.service; fi
   fi
@@ -305,6 +311,21 @@ leftovers() {
   fi
   # the passwordless sudo rule for cpu-cap.sh: nothing gets root without a password
   rm -f /etc/sudoers.d/hopparch-cpu-cap
+}
+
+# A second kernel in the boot menu: if a new `linux` breaks the boot, pick
+# linux-lts in GRUB. NVIDIA's open driver is prebuilt per kernel, so LTS gets
+# its own. grub-mkconfig sorts linux-lts above linux; GRUB_TOP_LEVEL keeps
+# linux the default entry (the menu is rebuilt in snapshots()).
+lts_kernel() {
+  say "Fallback kernel: linux-lts"
+  pacman -S --needed --noconfirm linux-lts >/dev/null
+  if pacman -Q nvidia-open >/dev/null 2>&1; then
+    pacman -S --needed --noconfirm nvidia-open-lts >/dev/null
+  fi
+  if [[ -f /etc/default/grub ]] && ! grep -q '^GRUB_TOP_LEVEL=' /etc/default/grub; then
+    echo 'GRUB_TOP_LEVEL="/boot/vmlinuz-linux"' >>/etc/default/grub
+  fi
 }
 
 # Upkeep once a week, no daemons: old package files cleaned (paccache keeps
@@ -422,6 +443,7 @@ settings_entries
 copy_system
 services
 leftovers
+lts_kernel
 upkeep
 firewall
 snapshots

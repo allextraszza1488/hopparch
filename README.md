@@ -37,7 +37,7 @@ A battery, or a portable chassis, marks the machine as a laptop. The package lis
 
 Under 6 GB of RAM or under 4 cores, the suggestion is **minimal**. Otherwise it is **full**. You can take the other one.
 
-Both profiles get the desktop, Firefox, the file manager, Neovim, Mullvad, snapshots, and the firewall. **full** also gets Steam, the 32-bit drivers for the GPUs it found, gamemode, the compilers, `mpv`, and `imv`.
+Both profiles get the desktop, Firefox, the file manager, Neovim, Mullvad, snapshots, the firewall, and `linux-lts` as a second kernel in the boot menu. Bluetooth is installed only with an adapter, and stays off until you turn it on in Settings. **full** also gets Steam, the 32-bit drivers for the GPUs it found, gamemode, the compilers, `mpv`, and `imv`.
 
 Mullvad installs and does not connect until an account is set. The wallpaper file is not in this repo. Point `wallpaper.sh` at a picture after the first login.
 
