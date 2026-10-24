@@ -52,7 +52,7 @@ packages() {
     brightnessctl power-profiles-daemon python-gobject fastfetch \
     grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
     ttf-jetbrains-mono-nerd noto-fonts adwaita-fonts \
-    jq pacman-contrib reflector \
+    jq pacman-contrib reflector upower \
     gocryptfs rtkit wireless-regdb
 }
 
@@ -230,7 +230,7 @@ settings_entries() {
   # "/" = always (a package we install); the rest need the hardware
   for entry in "Wi-Fi:wifi:/sys/class/net/*/wireless" "Bluetooth:bluetooth:/sys/class/bluetooth/hci*" \
                "Brightness:brightness:/sys/class/backlight/*" "Power mode:power:/" \
-               "Battery:battery:/sys/class/power_supply/BAT*" "Specs:specs:/"; do
+               "Battery:battery:/sys/class/power_supply/BAT*" "Devices:devices:/" "Specs:specs:/"; do
     IFS=: read -r name arg have <<<"$entry"
     # shellcheck disable=SC2086  # $have is a glob on purpose
     compgen -G $have >/dev/null || continue
@@ -249,6 +249,19 @@ copy_system() {
     [[ -x $src || $src == system/etc/grub.d/* ]] && mode=755
     install -D -m "$mode" "$src" "/${src#system/}"
   done < <(find system -type f -print0)
+}
+
+# Settings > Devices: batt prints the battery of the mouse, headset and
+# Bluetooth devices (UPower, plus the headset over hidraw). C, built from the
+# source copy_system just put in /usr/local/src/hopparch: no binary in git.
+device_batteries() {
+  say "batt (Settings > Devices)"
+  pacman -S --needed --noconfirm base-devel >/dev/null
+  if ! cc -O2 -Wall -o /usr/local/bin/batt /usr/local/src/hopparch/batt.c -lsystemd; then
+    warn "building batt failed (see above): Settings > Devices stays empty until the next ./setup.sh"
+  fi
+  # the headset's udev rule from copy_system, without a replug
+  if booted; then udevadm control --reload && udevadm trigger --subsystem-match=hidraw || true; fi
 }
 
 # Other systems in the boot menu. Windows: GRUB's os-prober, switched on only
@@ -460,6 +473,7 @@ copy_config
 stash_apps
 settings_entries
 copy_system
+device_batteries
 services
 leftovers
 lts_kernel

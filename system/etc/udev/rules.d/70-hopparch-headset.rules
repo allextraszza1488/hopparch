@@ -1,0 +1,5 @@
+# batt (Settings > Devices) reads the PRO X 2 LIGHTSPEED headset's battery
+# from its dongle's hidraw node. uaccess: the user at the seat may open that
+# node. The other Logitech hidraw nodes (mouse, keyboard input) stay root-only.
+# 70-: uaccess has to be tagged before 73-seat-late.rules applies it.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0af7", TAG+="uaccess"

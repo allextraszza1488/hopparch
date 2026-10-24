@@ -1,8 +1,9 @@
 #!/bin/bash
 # Settings without a settings app: the Wi-Fi, Bluetooth, Brightness, Power
-# mode, Battery and Specs entries in SUPER+D, and the mouse bar's settings
-# button (no argument = a menu of all of them). Every screen is a fuzzel list.
-#   settings.sh [wifi|bluetooth|brightness|power|battery|specs]
+# mode, Battery, Devices and Specs entries in SUPER+D, and the mouse bar's
+# settings button (no argument = a menu of all of them). Every screen is a
+# fuzzel list.
+#   settings.sh [wifi|bluetooth|brightness|power|battery|devices|specs]
 set -euo pipefail
 # *( ) patterns (bt_pair strips colour codes with one)
 shopt -s extglob
@@ -193,6 +194,13 @@ battery() {
   show battery "${out%$'\n'}"
 }
 
+# mouse, headset, Bluetooth devices: batt (setup.sh builds it from
+# /usr/local/src/hopparch/batt.c)
+devices() {
+  command -v batt >/dev/null || { note "batt isn't built" "run: sudo ./setup.sh"; return 0; }
+  show devices "$(batt)"
+}
+
 # the hardware and system, and nothing that identifies the machine or the
 # network (no hostname, user, IP, MAC, serial numbers)
 specs() {
@@ -202,11 +210,11 @@ specs() {
 
 
 case ${1:-} in
-  wifi|bluetooth|brightness|power|battery|specs) "$1" ;;
+  wifi|bluetooth|brightness|power|battery|devices|specs) "$1" ;;
   "")
-    case $(printf 'Wi-Fi\nBluetooth\nBrightness\nPower mode\nBattery\nSpecs' | pick settings --lines 6) in
+    case $(printf 'Wi-Fi\nBluetooth\nBrightness\nPower mode\nBattery\nDevices\nSpecs' | pick settings --lines 7) in
       Wi-Fi) wifi ;; Bluetooth) bluetooth ;; Brightness) brightness ;;
-      "Power mode") power ;; Battery) battery ;; Specs) specs ;;
+      "Power mode") power ;; Battery) battery ;; Devices) devices ;; Specs) specs ;;
     esac ;;
-  *) echo "usage: settings.sh [wifi|bluetooth|brightness|power|battery|specs]" >&2; exit 2 ;;
+  *) echo "usage: settings.sh [wifi|bluetooth|brightness|power|battery|devices|specs]" >&2; exit 2 ;;
 esac
