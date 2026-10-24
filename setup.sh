@@ -48,11 +48,26 @@ packages() {
   pacman -S --needed --noconfirm \
     hyprland xdg-desktop-portal-hyprland waybar kitty fuzzel \
     fish eza zoxide fzf bat glow neovim btop firefox thunar \
-    greetd greetd-tuigreet ydotool \
-    bluez bluez-utils brightnessctl power-profiles-daemon python-gobject fastfetch \
-    grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle \
-    ttf-jetbrains-mono-nerd noto-fonts \
-    jq pacman-contrib reflector
+    greetd greetd-tuigreet wtype \
+    brightnessctl power-profiles-daemon python-gobject fastfetch \
+    grim slurp wl-clipboard cliphist mako libnotify hyprlock hypridle hyprpaper \
+    ttf-jetbrains-mono-nerd noto-fonts adwaita-fonts \
+    jq pacman-contrib reflector \
+    gocryptfs rtkit wireless-regdb
+}
+
+# Mullvad on every profile (minimal and full): installed so its app works,
+# nothing configured. The package only prints "systemctl enable"; it does not
+# enable the daemon, and the unit looks for ca.crt in /opt/Mullvad VPN/resources/
+# while the file ships in /usr/lib/mullvad-vpn/. Without both, the app cannot
+# reach the daemon. Logging in, connecting and lockdown are left to you.
+mullvad_vpn() {
+  say "Mullvad VPN"
+  pacman -S --needed --noconfirm mullvad-vpn
+  mkdir -p "/opt/Mullvad VPN/resources"
+  ln -sfn /usr/lib/mullvad-vpn/ca.crt "/opt/Mullvad VPN/resources/ca.crt"
+  systemctl enable mullvad-daemon.service
+  if booted; then systemctl start mullvad-daemon.service; fi
 }
 
 # The on-screen keyboard (mouse bar's kbd button) comes from the AUR
@@ -90,7 +105,7 @@ onscreen_keyboard() {
   rm -rf "$tmp"
 }
 
-# The pieces only the full profile has: gaming, coding tools, media, Claude Code.
+# The pieces only the full profile has: gaming, coding tools, media.
 # Steam needs the 32-bit repo (multilib), which Arch ships switched off.
 gpu_vendors() {
   local d
@@ -122,24 +137,11 @@ full_extras() {
   pacman -S --needed --noconfirm \
     steam gamemode lib32-gamemode vulkan-icd-loader "${lib32[@]}" \
     clang lua-language-server arduino-language-server arduino-cli gdb \
+    tree-sitter-bash tree-sitter-python \
     mpv imv ffmpegthumbnailer tumbler \
     nodejs npm
   # gamemode may raise a game's priority only for members of this group
   usermod -aG gamemode "$USER_"
-
-  # Claude Code: not in the Arch repos. Anthropic's native installer puts it in
-  # ~/.local/bin (already in fish's PATH) and it updates itself; never logged
-  # in. Not npm: npm 12 blocks the package's install script, which is what
-  # downloads the real binary ("no native binary"). A broken npm copy from an
-  # earlier setup.sh is removed first. "Works" = `claude --version` answers.
-  # A failed download only costs this.
-  if ! runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1; then
-    rm -rf "$HOME_/.local/lib/node_modules/@anthropic-ai/claude-code"
-    rm -f "$HOME_/.local/bin/claude"
-    runuser -u "$USER_" -- env HOME="$HOME_" bash -c 'curl -fsSL https://claude.ai/install.sh | bash' >/dev/null 2>&1 \
-      && runuser -u "$USER_" -- env HOME="$HOME_" "$HOME_/.local/bin/claude" --version >/dev/null 2>&1 \
-      || warn "Claude Code did not install (network?): run ./setup.sh again later"
-  fi
 }
 
 # config/ with the profile's own files (profiles/<name>/config/) laid over it,
@@ -164,8 +166,9 @@ copy_tree() {
     if ! cmp -s "$src" "$dst" 2>/dev/null; then
       # differs from what we installed last time = your edit, keep a copy
       if [[ -f $dst ]] && ! cmp -s "$dst" "$STATE/$rel" 2>/dev/null; then
-        cp -p "$dst" "$dst.bak-$(date +%F-%H%M%S)"
-        echo "  kept your version: $dst.bak-*"
+        local bak="$dst.bak-$(date +%F-%H%M%S)"
+        cp -p "$dst" "$bak"
+        echo "  kept your version: $bak"
       fi
       mode=644
       [[ -x $src ]] && mode=755
@@ -281,31 +284,67 @@ services() {
     chown greeter:greeter /var/cache/tuigreet/lastuser
   fi
 
-  # mouse from the keyboard: ydotoold makes a virtual mouse (needs root for
-  # that) and gives this user its socket. Written here, not in system/,
-  # because it needs the user's id.
-  cat >/etc/systemd/system/ydotoold.service <<EOF
-[Unit]
-Description=ydotoold: mouse from the keyboard (hopparch)
-
-[Service]
-ExecStart=/usr/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-own=$(id -u "$USER_"):$(id -g "$USER_")
-RuntimeDirectory=ydotoold
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable ydotoold.service
   # power modes (Settings > Power mode); bluetooth only where an adapter exists
   systemctl enable power-profiles-daemon.service
   if booted; then systemctl start power-profiles-daemon.service; fi
+  # AMD laptops: if a power profile raises the advertised clock and leaves the
+  # cap behind, reload the driver once at boot. Laptops only (the unit checks
+  # for a battery too); no-op on Intel and when the cap is already at max.
+  if [[ -f /etc/systemd/system/hopparch-cpu-cap.service ]]; then
+    chmod 755 /usr/local/lib/hopparch/cpu-cap.sh
+    if compgen -G '/sys/class/power_supply/BAT*' >/dev/null; then
+      systemctl enable hopparch-cpu-cap.service
+    else
+      systemctl disable hopparch-cpu-cap.service 2>/dev/null || true
+    fi
+  fi
+  # Bluetooth only where an adapter exists, and off until it is turned on in
+  # Settings > Bluetooth: the adapter stays unpowered at every boot
   if compgen -G '/sys/class/bluetooth/hci*' >/dev/null; then
+    pacman -S --needed --noconfirm bluez bluez-utils >/dev/null
+    local bt=/etc/bluetooth/main.conf
+    if grep -q '^#\?AutoEnable *=' "$bt"; then
+      sed -i 's/^#\?AutoEnable *=.*/AutoEnable=false/' "$bt"
+    else
+      printf '\n[Policy]\nAutoEnable=false\n' >>"$bt"
+    fi
     systemctl enable bluetooth.service
     if booted; then systemctl start bluetooth.service; fi
   fi
-  # start it now too, unless we're inside install.sh's chroot
-  if booted; then systemctl daemon-reload && systemctl restart ydotoold.service; fi
   return 0
+}
+
+# What older hopparch versions installed and this one doesn't: removed on the
+# next ./setup.sh, so an updated machine ends up like a fresh install.
+leftovers() {
+  # the keyboard mouse: a root ydotoold service that could type and click
+  # for any program of the user
+  if [[ -f /etc/systemd/system/ydotoold.service ]]; then
+    say "Removing the keyboard mouse (ydotoold)"
+    systemctl disable --now ydotoold.service 2>/dev/null || true
+    rm -f /etc/systemd/system/ydotoold.service
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  if pacman -Q ydotool >/dev/null 2>&1; then
+    pacman -Rns --noconfirm ydotool >/dev/null || warn "could not remove ydotool"
+  fi
+  # the passwordless sudo rule for cpu-cap.sh: nothing gets root without a password
+  rm -f /etc/sudoers.d/hopparch-cpu-cap
+}
+
+# A second kernel in the boot menu: if a new `linux` breaks the boot, pick
+# linux-lts in GRUB. NVIDIA's open driver is prebuilt per kernel, so LTS gets
+# its own. grub-mkconfig sorts linux-lts above linux; GRUB_TOP_LEVEL keeps
+# linux the default entry (the menu is rebuilt in snapshots()).
+lts_kernel() {
+  say "Fallback kernel: linux-lts"
+  pacman -S --needed --noconfirm linux-lts >/dev/null
+  if pacman -Q nvidia-open >/dev/null 2>&1; then
+    pacman -S --needed --noconfirm nvidia-open-lts >/dev/null
+  fi
+  if [[ -f /etc/default/grub ]] && ! grep -q '^GRUB_TOP_LEVEL=' /etc/default/grub; then
+    echo 'GRUB_TOP_LEVEL="/boot/vmlinuz-linux"' >>/etc/default/grub
+  fi
 }
 
 # Upkeep once a week, no daemons: old package files cleaned (paccache keeps
@@ -353,9 +392,9 @@ snapshots() {
     mkinitcpio -P >/dev/null
   fi
 
-  # new snapshots get into the boot menu right after each update. A pacman
-  # hook instead of grub-btrfs's background daemon: nothing runs in between.
-  # "zzz" sorts after snap-pac's own "zz-snap-pac-post" hook.
+  # snap-pac snapshots every install. The menu has to list that snapshot,
+  # or GRUB cannot boot it. grub-mkconfig walks every EFI entry, so this
+  # hook is slow on purpose. "zzz" sorts after snap-pac's own hook.
   mkdir -p /etc/pacman.d/hooks
   cat >/etc/pacman.d/hooks/zzz-hopparch-grub-snapshots.hook <<'EOF'
 [Trigger]
@@ -376,7 +415,45 @@ EOF
 }
 
 
+# The FA506NC panel is drawn by amdgpu. The EC brightness device accepts a
+# number and the picture does not change. amdgpu's automatic path uses AUX,
+# which this panel also ignores. PWM (acpi_backlight=native amdgpu.backlight=0)
+# is the path that moves the backlight. Only that machine: drop the old
+# blacklist there, and rebuild the boot menu when those words are not in it.
+# Other machines are left alone, including a blacklist they still need.
+backlight_fix() {
+  booted || return 0
+  local conf=/etc/modprobe.d/hopparch-backlight.conf grub=/etc/default/grub product
+  product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+  if [[ $product == *FA506NC* && -f $grub ]]; then
+    if [[ -f $conf ]] && grep -q 'nvidia_wmi_ec_backlight' "$conf"; then
+      rm -f "$conf"
+      say "Backlight: removed the EC driver blacklist"
+    fi
+    local token
+    for token in acpi_backlight=native amdgpu.backlight=0; do
+      grep -Fq "$token" "$grub" && continue
+      sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\\(.*\\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\\1 $token\"/" "$grub"
+    done
+    if ! grep -Fq 'acpi_backlight=native' /boot/grub/grub.cfg \
+      || ! grep -Fq 'amdgpu.backlight=0' /boot/grub/grub.cfg; then
+      grub-mkconfig -o /boot/grub/grub.cfg >/dev/null \
+        && warn "Backlight: PWM mode is set. It starts working after the next reboot" \
+        || warn "Backlight: could not update the boot menu"
+    fi
+    return 0
+  fi
+  [[ -d /sys/class/backlight/nvidia_wmi_ec_backlight ]] && return 0
+  compgen -G '/sys/class/backlight/amdgpu_bl*' >/dev/null && return 0
+  compgen -G '/sys/class/backlight/intel_backlight' >/dev/null && return 0
+  compgen -G '/sys/bus/wmi/devices/603E9613-EF25-4338-A3D0-C46177516DB7*' >/dev/null || return 0
+  modprobe nvidia_wmi_ec_backlight 2>/dev/null \
+    && say "Backlight: EC driver loaded" \
+    || warn "Backlight: EC driver did not load"
+}
+
 packages
+mullvad_vpn
 onscreen_keyboard
 [[ $PROFILE == full ]] && full_extras
 copy_config
@@ -384,8 +461,11 @@ stash_apps
 settings_entries
 copy_system
 services
+leftovers
+lts_kernel
 upkeep
 firewall
 dual_boot
 snapshots
+backlight_fix
 say "Done. Log out and back in (or reboot): running apps keep the old config until then."

@@ -523,9 +523,35 @@ run_setup() {
   # it stopped or failed partway, and setup must not run on a half-made system
   grep -qE '^[^#].*[[:space:]]/[[:space:]]' /mnt/etc/fstab 2>/dev/null \
     || die "archinstall did not finish (no complete /mnt/etc/fstab) -- nothing else was done"
+  local dest="/home/$USERNAME/hopparch"
   say "Getting hopparch into ~/hopparch"
-  arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q -b "$REPO_BRANCH" "$REPO_URL" "/home/$USERNAME/hopparch"
-  arch-chroot /mnt "/home/$USERNAME/hopparch/setup.sh" --profile="$PROFILE" "$USERNAME"
+  if [[ -d /mnt$dest/.git ]]; then
+    arch-chroot /mnt runuser -u "$USERNAME" -- git -C "$dest" pull -q
+  elif [[ -e /mnt$dest ]]; then
+    die "$dest is already there and is not a git checkout"
+  else
+    arch-chroot /mnt runuser -u "$USERNAME" -- git clone -q -b "$REPO_BRANCH" "$REPO_URL" "$dest"
+  fi
+  arch-chroot /mnt "$dest/setup.sh" --profile="$PROFILE" "$USERNAME"
+}
+
+# Same ISO session, archinstall finished, clone or setup did not. /mnt is still
+# the new system. Skip the format questions.
+resume_setup() {
+  grep -qE '^[^#].*[[:space:]]/[[:space:]]' /mnt/etc/fstab 2>/dev/null || return 1
+  ask "This disk is already installed. Skip formatting and only run setup?" || return 1
+  local homes=(/mnt/home/*/)
+  if ((${#homes[@]} == 1)) && [[ -d ${homes[0]} ]]; then
+    USERNAME=$(basename "${homes[0]}")
+  else
+    USERNAME=$(ask_value "Username" "")
+  fi
+  [[ $USERNAME =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "username: lowercase letters, digits, _ and - only"
+  [[ -d /mnt/home/$USERNAME ]] || die "no /home/$USERNAME on the installed system"
+  say "Skipping archinstall. Running setup only."
+  run_setup
+  say "All done. Reboot, unlock the disk, then log in on the login screen."
+  exit 0
 }
 
 
@@ -533,6 +559,7 @@ preflight
 scan
 show_scan
 choose_profile
+resume_setup || true
 find_partitions
 ask_install_settings
 confirm_install

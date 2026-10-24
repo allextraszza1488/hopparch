@@ -1,7 +1,7 @@
 #!/bin/bash
 # Health check of the test VM after a change. Read-only: SSH only, never types
 # on the VM's screen. Run on the laptop: dev/vm-check.sh
-# Expects the VM rig from DESIGN.md (user test/test, SSH on 127.0.0.1:2222;
+# Expects the test VM (user test/test, SSH on 127.0.0.1:2222;
 # second VM: PORT=2223 dev/vm-check.sh).
 set -uo pipefail
 
@@ -27,10 +27,9 @@ for p in Hyprland waybar mako hypridle; do
 done
 
 section "Services"
-for s in greetd ydotoold NetworkManager; do
+for s in greetd NetworkManager; do
   printf '%-15s enabled=%s active=%s\n' "$s" "$(systemctl is-enabled $s 2>&1)" "$(systemctl is-active $s 2>&1)"
 done
-[[ -S /run/ydotoold/socket && -O /run/ydotoold/socket ]] && echo "ok   ydotool socket belongs to test" || echo "BAD  ydotool socket"
 echo test | sudo -S -p "" ufw status verbose 2>/dev/null | grep -q 'deny (incoming)' && echo "ok   firewall: incoming blocked" || echo "BAD  firewall"
 [[ -f /etc/snapper/configs/root ]] && echo "ok   snapshots configured ($(echo test | sudo -S -p "" snapper -c root list 2>/dev/null | tail -n +3 | grep -vc current) kept)" || echo "BAD  no snapper config"
 echo "listening ports (only VM-dev sshd expected): $(echo test | sudo -S -p "" ss -tlnpH 2>/dev/null | grep -o 'users:(("[^"]*' | cut -d'"' -f2 | sort -u | xargs)"

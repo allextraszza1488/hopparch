@@ -5,9 +5,18 @@
   "height": 26,
   // stats.jsonc defines "group/stats" (CPU, GPU, RAM); the minimal profile empties it
   "include": ["~/.config/waybar/stats.jsonc"],
-  "modules-left": ["custom/mousebar", "wireplumber", "group/stats"],
-  "modules-center": [],
-  "modules-right": ["clock", "custom/power"],
+  "modules-left": ["custom/mousebar", "wireplumber", "group/stats", "custom/wifi"],
+  "modules-center": ["wlr/taskbar"],
+  "modules-right": ["clock", "battery", "custom/power"],
+
+  // open windows: icon only, one row. Middle click closes.
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": 16,
+    "tooltip-format": "{title}",
+    "on-click": "activate",
+    "on-click-middle": "close"
+  },
 
   // shows/hides the mouse bar (mouse.jsonc) on the left edge. It is started by
   // Hyprland, not by this bar, so reloading this bar leaves it alone. ^ and
@@ -30,6 +39,23 @@
 
   "clock": {
     "format": "{:%a %d-%m-%Y  %H:%M}",
+    "tooltip": false
+  },
+
+  // next to RAM. No wireless device: stats.sh prints nothing and this disappears.
+  "custom/wifi": {
+    "exec": "$HOME/.config/scripts/stats.sh wifi",
+    "return-type": "json",
+    "interval": 5
+  },
+
+  // hidden when there is no battery. Lightning only while it is actually charging.
+  "battery": {
+    "interval": 10,
+    "format": "{capacity}%",
+    "format-charging": " {capacity}%",
+    "format-full": "{capacity}%",
+    "format-plugged": "{capacity}%",
     "tooltip": false
   },
 

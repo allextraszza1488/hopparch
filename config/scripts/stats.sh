@@ -41,8 +41,43 @@ gpu() {
   return 0
 }
 
+# Wi-Fi icon for the bar. Nothing if this machine has no wireless device,
+# so a desktop with only a cable does not get an empty icon. The name of
+# the network is the tooltip. The password is never read.
+wifi() {
+  local iface q pct icon tip ssid
+  iface=""
+  for iface in "$sys"/class/net/*/wireless; do
+    [[ -e $iface ]] || continue
+    iface=$(basename "$(dirname "$iface")")
+    break
+  done
+  [[ -n $iface && $iface != *'*'* ]] || return 0
+  q=$(awk -v i="$iface:" '$1 == i { printf "%d", $3; exit }' "$sys/../proc/net/wireless" 2>/dev/null || true)
+  # link quality in /proc is 0..70
+  if [[ -z ${q:-} || $q -le 0 ]]; then
+    icon="󰤭"
+    tip="Wi-Fi disconnected"
+  else
+    pct=$(( q * 100 / 70 ))
+    (( pct > 100 )) && pct=100
+    if (( pct >= 75 )); then icon="󰤨"
+    elif (( pct >= 50 )); then icon="󰤥"
+    elif (( pct >= 25 )); then icon="󰤢"
+    else icon="󰤟"
+    fi
+    ssid=""
+    if command -v iw >/dev/null; then
+      ssid=$(iw dev "$iface" link 2>/dev/null | awk -F': ' '/SSID/ { print $2; exit }')
+    fi
+    tip="${ssid:-Wi-Fi}  ${pct}%"
+  fi
+  jq -nc --arg text "$icon" --arg tooltip "$tip" '{text:$text,tooltip:$tooltip}'
+}
+
 case ${1:-} in
   cpu-temp) cpu_temp ;;
   gpu) gpu ;;
-  *) echo "usage: stats.sh cpu-temp|gpu" >&2; exit 2 ;;
+  wifi) wifi ;;
+  *) echo "usage: stats.sh cpu-temp|gpu|wifi" >&2; exit 2 ;;
 esac

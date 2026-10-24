@@ -19,12 +19,26 @@ window#waybar {
   padding: 0 10px;
 }
 
+/* open windows: icons only, no labels */
+#taskbar {
+  padding: 0 2px;
+}
+#taskbar button {
+  padding: 0 3px;
+  margin: 0;
+}
+#taskbar button.minimized {
+  opacity: 0.45;
+}
+
 /* CPU 12% 54° | GPU 30% 61° | RAM 8.1G: thin lines between the parts */
 #cpu, #custom-cpu-temp, #custom-gpu, #memory {
   padding: 0 4px;
 }
 #cpu { padding-left: 10px; border-left: 1px solid #3a3a38; }
-#custom-gpu, #memory { border-left: 1px solid #3a3a38; padding-left: 10px; }
+#custom-gpu, #memory, #custom-wifi { border-left: 1px solid #3a3a38; padding-left: 10px; }
+#custom-wifi { padding-right: 8px; }
+#battery { padding: 0 10px; }
 
 #custom-mousebar:hover,
 #custom-power:hover {

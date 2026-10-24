@@ -1,0 +1,49 @@
+#!/bin/bash
+# Move credential files into the mounted vault and leave symlinks behind.
+# Running this again is safe.
+
+set -euo pipefail
+
+MOUNT="$HOME/Vault"
+
+if ! mountpoint -q "$MOUNT"; then
+  echo "Vault is not mounted."
+  exit 1
+fi
+
+move() {
+  local src=$1 dest=$2
+  if [[ -L $src ]]; then
+    return 0
+  fi
+  # A crash between rm and ln leaves the file only in the vault. Link it back.
+  if [[ ! -e $src ]]; then
+    if [[ -e $dest ]]; then
+      mkdir -p "$(dirname "$src")"
+      ln -s "$dest" "$src"
+      echo "locked $src"
+    fi
+    return 0
+  fi
+  if [[ -e $dest ]]; then
+    if cmp -s "$src" "$dest"; then
+      rm -f "$src"
+      ln -s "$dest" "$src"
+      echo "locked $src"
+      return 0
+    fi
+    echo "both copies differ, left both:" >&2
+    echo "  $src" >&2
+    echo "  $dest" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  mv "$src" "$dest"
+  ln -s "$dest" "$src"
+  echo "locked $src"
+}
+
+move "$HOME/.config/gh/hosts.yml" "$MOUNT/gh/hosts.yml"
+move "$HOME/.claude/.credentials.json" "$MOUNT/claude/credentials.json"
+move "$HOME/.claude.json" "$MOUNT/claude/claude.json"
+move "$HOME/.steam/steam.token" "$MOUNT/steam/steam.token"
